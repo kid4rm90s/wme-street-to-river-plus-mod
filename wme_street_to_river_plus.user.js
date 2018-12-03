@@ -80,7 +80,7 @@ function streetToRiver_init() {
                                                                 */
     function insertButtons() {
 
-        if(Waze.selectionManager.getSelectedFeatures().length === 0) return;
+        if(W.selectionManager.getSelectedFeatures().length === 0) return;
 
         // 2013-04-19: Catch exception
         try{
@@ -206,8 +206,8 @@ function streetToRiver_init() {
         setLastIsDeleteSegment(isDeleteSegment.checked);
 
         // 2014-01-09: Search for helper street. If found create or expand a river
-        for (var s=Waze.selectionManager.getSelectedFeatures().length-1; s>=0; s--) {
-            var sel = Waze.selectionManager.getSelectedFeatures()[s].model;
+        for (var s=W.selectionManager.getSelectedFeatures().length-1; s>=0; s--) {
+            var sel = W.selectionManager.getSelectedFeatures()[s].model;
             if (sel.type == "segment") {
                 // found segment
                 foundSelectedSegment = true;
@@ -215,7 +215,7 @@ function streetToRiver_init() {
                 if(isDeleteSegment.checked)
                 {
                   var wazeActionDeleteSegment = require("Waze/Action/DeleteSegment");
-                  Waze.model.actionManager.add(new wazeActionDeleteSegment(sel));
+                  W.model.actionManager.add(new wazeActionDeleteSegment(sel));
                 }
             }
         }
@@ -255,8 +255,8 @@ function streetToRiver_init() {
             pt[0] = sel.geometry.components[0];
             pt[1] = sel.geometry.components[1];
 
-            var seg = new OpenLayers.Geometry.LineString(pt);
-            segLength = seg.getGeodesicLength(Waze.map.getProjectionObject());
+            var seg = new OL.Geometry.LineString(pt);
+            segLength = seg.getGeodesicLength(W.map.getProjectionObject());
 
             // if small area is expected
             if (minArea/displacement > segLength) {
@@ -292,7 +292,7 @@ function streetToRiver_init() {
         // 2013-10-13: Is new street inside an existing river?
         var bAddNew = !0;
         var riverLandmark=null;
-        var repo = Waze.model.venues;
+        var repo = W.model.venues;
 
         var rrr, donorLandmark=null;
         for (var t in repo.objects)
@@ -441,7 +441,7 @@ console.log("donorLandmark="+riverLandmark.attributes.id);
         if(bAddNew){
             // 2014-01-09: Add new river
             // 2014-01-09: Create new river's Polygon
-            var polygon = new OpenLayers.Geometry.Polygon(new OpenLayers.Geometry.LinearRing(polyPoints));
+            var polygon = new OL.Geometry.Polygon(new OL.Geometry.LinearRing(polyPoints));
 
             // 2014-10-08: Creates river's Landmark
             riverLandmark = new wazefeatureVectorLandmark();
@@ -455,8 +455,8 @@ console.log("donorLandmark="+riverLandmark.attributes.id);
 
             // 2014-10-08: Add new Landmark to Waze Editor
             var riverLandmark_o=new wazeActionAddLandmark(riverLandmark);
-            Waze.model.actionManager.add(riverLandmark_o);
-            Waze.selectionManager.setSelectedModels([riverLandmark_o.landmark]);
+            W.model.actionManager.add(riverLandmark_o);
+            W.selectionManager.setSelectedModels([riverLandmark_o.landmark]);
 
             if (lmtype !== "OTHER")
             {
@@ -464,7 +464,7 @@ console.log("donorLandmark="+riverLandmark.attributes.id);
                 var address=riverLandmark.getAddress().attributes;
                 console.log(address);
                 var newAddressAtts={streetName: null, emptyStreet: true, cityName: null, emptyCity: true, stateID: address.state.id, countryID: address.country.id};
-                Waze.model.actionManager.add(new wazeActionUpdateFeatureAddress(riverLandmark, newAddressAtts, {streetIDField: 'streetID'} ));
+                W.model.actionManager.add(new wazeActionUpdateFeatureAddress(riverLandmark, newAddressAtts, {streetIDField: 'streetID'} ));
             }
 
         }
@@ -604,8 +604,8 @@ console.log("p2="+p2+", dist="+dist);
                 }
                 riverLandmark.geometry.components[0].components=uniq(componentsNew);
 
-                Waze.model.actionManager.add(new wazeActionUpdateFeatureGeometry(riverLandmark, Waze.model.venues,undoGeometry,riverLandmark.geometry));
-                Waze.model.actionManager.add(new wazeActionDeleteObject(donorLandmark, Waze.model.venues,undoGeometryDonor,donorLandmark.geometry));
+                W.model.actionManager.add(new wazeActionUpdateFeatureGeometry(riverLandmark, W.model.venues,undoGeometry,riverLandmark.geometry));
+                W.model.actionManager.add(new wazeActionDeleteObject(donorLandmark, W.model.venues,undoGeometryDonor,donorLandmark.geometry));
 
                 return true;
             }
@@ -692,7 +692,7 @@ console.log("p2="+p2+", dist="+dist);
 
                     // 2014-01-09: Update river landmark on Waze editor
                     // 2014-09-30: Gets UptdateFeatureGeometry
-                    Waze.model.actionManager.add(new wazeActionUpdateFeatureGeometry(riverLandmark, Waze.model.venues,undoGeometry,riverLandmark.geometry));
+                    W.model.actionManager.add(new wazeActionUpdateFeatureGeometry(riverLandmark, W.model.venues,undoGeometry,riverLandmark.geometry));
                     //delete undoGeometry;
 
                     console_log("Added: " + index);
@@ -711,7 +711,7 @@ console.log("p2="+p2+", dist="+dist);
                 var address=riverLandmark.getAddress().attributes;
                 console.log(address);
                 var newAddressAtts={streetName: null, emptyStreet: true, cityName: null, emptyCity: true, stateID: address.state.id, countryID: address.country.id};
-                Waze.model.actionManager.add(new wazeActionUpdateFeatureAddress(riverLandmark, newAddressAtts, {streetIDField: 'streetID'} ));
+                W.model.actionManager.add(new wazeActionUpdateFeatureAddress(riverLandmark, newAddressAtts, {streetIDField: 'streetID'} ));
             }
 
         }
@@ -734,7 +734,7 @@ console.log("p2="+p2+", dist="+dist);
         else
             segment2 = { 'x1': pointLine2To.x, 'y1': pointLine2To.y ,'x2': pointLine2From.x, 'y2': pointLine2From.y };
 
-        return OpenLayers.Geometry.segmentsIntersect(segment1,segment2,!1);
+        return OL.Geometry.segmentsIntersect(segment1,segment2,!1);
     }
 
     // 2013-06-02: Returns TRUE if polygon's direction is clockwise. FALSE -> counter-clockwise
@@ -789,13 +789,13 @@ console.log("p2="+p2+", dist="+dist);
 
             var ix = (eqb.offset - eqa.offset) / (eqa.slope - eqb.slope);
             var iy = eqa.slope * ix + eqa.offset;
-            return new OpenLayers.Geometry.Point(ix, iy);
+            return new OL.Geometry.Point(ix, iy);
         }
         else if ("number" == typeof eqa.x) {
-            return new OpenLayers.Geometry.Point(eqa.x, eqb.slope * eqa.x + eqb.offset);
+            return new OL.Geometry.Point(eqa.x, eqb.slope * eqa.x + eqb.offset);
         }
             else if ("number" == typeof eqb.y) {
-                return new OpenLayers.Geometry.Point(eqb.x, eqa.slope * eqb.x + eqa.offset);
+                return new OL.Geometry.Point(eqb.x, eqa.slope * eqb.x + eqa.offset);
             }
             return null;
     }
@@ -991,7 +991,7 @@ console.log("p2="+p2+", dist="+dist);
     // 2014-06-05: Get interface language
     scriptLanguage = getLanguage();
     intLanguageStrings();
-    Waze.selectionManager.events.register("selectionchanged", null, insertButtons);
+    W.selectionManager.events.register("selectionchanged", null, insertButtons);
 
 }
 
@@ -1012,5 +1012,5 @@ the command to add links is WMERegisterKeyboardShortcut(ScriptName, ShortcutsHea
     ShortcutKeysObj: the is the object representing the keys watched set this to '-1' to let the users specify their own shortcuts.
     ShortcutKeysObj: The alt, shift, and ctrl keys are A=alt, S=shift, C=ctrl. for short cut to use "alt shift ctrl and l" the object would be 'ASC+l'
 */
-function WMEKSRegisterKeyboardShortcut(a,b,c,d,e,f,g){try{I18n.translations[I18n.locale].keyboard_shortcuts.groups[a].members.length}catch(c){Waze.accelerators.Groups[a]=[],Waze.accelerators.Groups[a].members=[],I18n.translations[I18n.locale].keyboard_shortcuts.groups[a]=[],I18n.translations[I18n.locale].keyboard_shortcuts.groups[a].description=b,I18n.translations[I18n.locale].keyboard_shortcuts.groups[a].members=[]}if(e&&"function"==typeof e){I18n.translations[I18n.locale].keyboard_shortcuts.groups[a].members[c]=d,Waze.accelerators.addAction(c,{group:a});var i="-1",j={};j[i]=c,Waze.accelerators._registerShortcuts(j),null!==f&&(j={},j[f]=c,Waze.accelerators._registerShortcuts(j)),W.accelerators.events.register(c,null,function(){e(g)})}else alert("The function "+e+" has not been declared")}function WMEKSLoadKeyboardShortcuts(a){if(console.log("WMEKSLoadKeyboardShortcuts("+a+")"),localStorage[a+"KBS"])for(var b=JSON.parse(localStorage[a+"KBS"]),c=0;c<b.length;c++)try{Waze.accelerators._registerShortcuts(b[c])}catch(a){console.log(a)}}function WMEKSSaveKeyboardShortcuts(a){console.log("WMEKSSaveKeyboardShortcuts("+a+")");var b=[];for(var c in Waze.accelerators.Actions){var d="";if(Waze.accelerators.Actions[c].group==a){Waze.accelerators.Actions[c].shortcut?(Waze.accelerators.Actions[c].shortcut.altKey===!0&&(d+="A"),Waze.accelerators.Actions[c].shortcut.shiftKey===!0&&(d+="S"),Waze.accelerators.Actions[c].shortcut.ctrlKey===!0&&(d+="C"),""!==d&&(d+="+"),Waze.accelerators.Actions[c].shortcut.keyCode&&(d+=Waze.accelerators.Actions[c].shortcut.keyCode)):d="-1";var e={};e[d]=Waze.accelerators.Actions[c].id,b[b.length]=e}}localStorage[a+"KBS"]=JSON.stringify(b)}
+function WMEKSRegisterKeyboardShortcut(a,b,c,d,e,f,g){try{I18n.translations[I18n.locale].keyboard_shortcuts.groups[a].members.length}catch(c){W.accelerators.Groups[a]=[],W.accelerators.Groups[a].members=[],I18n.translations[I18n.locale].keyboard_shortcuts.groups[a]=[],I18n.translations[I18n.locale].keyboard_shortcuts.groups[a].description=b,I18n.translations[I18n.locale].keyboard_shortcuts.groups[a].members=[]}if(e&&"function"==typeof e){I18n.translations[I18n.locale].keyboard_shortcuts.groups[a].members[c]=d,W.accelerators.addAction(c,{group:a});var i="-1",j={};j[i]=c,W.accelerators._registerShortcuts(j),null!==f&&(j={},j[f]=c,W.accelerators._registerShortcuts(j)),W.accelerators.events.register(c,null,function(){e(g)})}else alert("The function "+e+" has not been declared")}function WMEKSLoadKeyboardShortcuts(a){if(console.log("WMEKSLoadKeyboardShortcuts("+a+")"),localStorage[a+"KBS"])for(var b=JSON.parse(localStorage[a+"KBS"]),c=0;c<b.length;c++)try{W.accelerators._registerShortcuts(b[c])}catch(a){console.log(a)}}function WMEKSSaveKeyboardShortcuts(a){console.log("WMEKSSaveKeyboardShortcuts("+a+")");var b=[];for(var c in W.accelerators.Actions){var d="";if(W.accelerators.Actions[c].group==a){W.accelerators.Actions[c].shortcut?(W.accelerators.Actions[c].shortcut.altKey===!0&&(d+="A"),W.accelerators.Actions[c].shortcut.shiftKey===!0&&(d+="S"),W.accelerators.Actions[c].shortcut.ctrlKey===!0&&(d+="C"),""!==d&&(d+="+"),W.accelerators.Actions[c].shortcut.keyCode&&(d+=W.accelerators.Actions[c].shortcut.keyCode)):d="-1";var e={};e[d]=W.accelerators.Actions[c].id,b[b.length]=e}}localStorage[a+"KBS"]=JSON.stringify(b)}
 /* ********************************************************** */

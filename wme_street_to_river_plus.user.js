@@ -3,7 +3,7 @@
 // @description     This script create a new river landmark in waze map editor (WME). It transforms the the geometry of a new unsaved street to a polygon.
 // @namespace       waze-ua
 // @grant           none
-// @version         2019.03.13.001
+// @version         2019.08.27.002
 // @include         https://*waze.com/*editor*
 // @exclude         https://*waze.com/*user/editor*
 // ==/UserScript==
@@ -106,6 +106,8 @@ function streetToRiver_init() {
         selRiverWidth.append( $('<option value="5"> 5 ' + strMeters + '</option>') );
         selRiverWidth.append( $('<option value="8"> 8 ' + strMeters + '</option>') );
         selRiverWidth.append( $('<option value="10">10 ' + strMeters + '</option>') );
+        selRiverWidth.append( $('<option value="11">11 ' + strMeters + '</option>') );
+        selRiverWidth.append( $('<option value="12">12 ' + strMeters + '</option>') );
         selRiverWidth.append( $('<option value="13">13 ' + strMeters + '</option>') );
         selRiverWidth.append( $('<option value="15">15 ' + strMeters + '</option>') );
         selRiverWidth.append( $('<option value="20">20 ' + strMeters + '</option>') );

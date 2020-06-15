@@ -3,12 +3,12 @@
 // @description     This script create a new river landmark in waze map editor (WME). It transforms the the geometry of a new unsaved street to a polygon.
 // @namespace       waze-ua
 // @grant           none
-// @version         2019.10.10.001
+// @version         2020.06.15.001
 // @include         https://*waze.com/*editor*
 // @exclude         https://*waze.com/*user/editor*
 // ==/UserScript==
 
-// Base on WME Street to river
+// Based on WME Street to river
 
 // Mini howto:
 // 1) install this script as greasemonkey script or chrome extension
@@ -21,6 +21,11 @@
 // 5) Edit the new landmark as you like
 //
 // Updated by: Eduardo Carvajal
+
+/* global W */
+/* global OpenLayers */
+/* global $ */
+/* global require */
 
 var version = GM_info.script.version;
 
@@ -258,7 +263,7 @@ function streetToRiver_init() {
       pt[0] = sel.geometry.components[0];
       pt[1] = sel.geometry.components[1];
 
-      var seg = new OL.Geometry.LineString(pt);
+      var seg = new OpenLayers.Geometry.LineString(pt);
       segLength = seg.getGeodesicLength(W.map.getProjectionObject());
 
       // if small area is expected
@@ -369,7 +374,7 @@ function streetToRiver_init() {
       // new:
       //TODO optimize this, convert displacement into map units for easier scale calculation
       var points = [pa, pb];
-      var ls = new OL.Geometry.LineString(points);
+      var ls = new OpenLayers.Geometry.LineString(points);
       var len = ls.getGeodesicLength(W.map.getProjectionObject());
       var scale = (len + displacement / 2) / len;
 
@@ -455,7 +460,7 @@ function streetToRiver_init() {
     if (bAddNew) {
       // 2014-01-09: Add new river
       // 2014-01-09: Create new river's Polygon
-      var polygon = new OL.Geometry.Polygon(new OL.Geometry.LinearRing(polyPoints));
+      var polygon = new OpenLayers.Geometry.Polygon(new OpenLayers.Geometry.LinearRing(polyPoints));
 
       // 2014-10-08: Creates river's Landmark
       riverLandmark = new wazefeatureVectorLandmark();
@@ -470,7 +475,7 @@ function streetToRiver_init() {
       // 2014-10-08: Add new Landmark to Waze Editor
       var riverLandmark_o = new wazeActionAddLandmark(riverLandmark);
       W.model.actionManager.add(riverLandmark_o);
-      W.selectionManager.setSelectedModels([riverLandmark_o.landmark]);
+      W.selectionManager.setSelectedModels([riverLandmark]);
 
       if (lmtype !== "OTHER") {
         console.log("bAddNew");
@@ -764,7 +769,7 @@ function streetToRiver_init() {
         'y2': pointLine2From.y
       };
 
-    return OL.Geometry.segmentsIntersect(segment1, segment2, !1);
+    return OpenLayers.Geometry.segmentsIntersect(segment1, segment2, !1);
   }
 
   // 2013-06-02: Returns TRUE if polygon's direction is clockwise. FALSE -> counter-clockwise
@@ -823,11 +828,11 @@ function streetToRiver_init() {
 
       var ix = (eqb.offset - eqa.offset) / (eqa.slope - eqb.slope);
       var iy = eqa.slope * ix + eqa.offset;
-      return new OL.Geometry.Point(ix, iy);
+      return new OpenLayers.Geometry.Point(ix, iy);
     } else if ("number" == typeof eqa.x) {
-      return new OL.Geometry.Point(eqa.x, eqb.slope * eqa.x + eqb.offset);
+      return new OpenLayers.Geometry.Point(eqa.x, eqb.slope * eqa.x + eqb.offset);
     } else if ("number" == typeof eqb.y) {
-      return new OL.Geometry.Point(eqb.x, eqa.slope * eqb.x + eqa.offset);
+      return new OpenLayers.Geometry.Point(eqb.x, eqa.slope * eqb.x + eqa.offset);
     }
     return null;
   }

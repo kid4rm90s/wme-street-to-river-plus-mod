@@ -6,6 +6,8 @@
 // @version         2020.06.15.001
 // @include         https://*waze.com/*editor*
 // @exclude         https://*waze.com/*user/editor*
+// @updateURL       https://github.com/waze-ua/WME-PlaceNames-Plus/raw/master/wme-placenames-plus.user.js
+// @downloadURL     https://github.com/waze-ua/WME-PlaceNames-Plus/raw/master/wme-placenames-plus.user.js
 // ==/UserScript==
 
 // Based on WME Street to river

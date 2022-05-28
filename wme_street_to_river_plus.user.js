@@ -3,11 +3,11 @@
 // @description     This script create a new river landmark in waze map editor (WME). It transforms the the geometry of a new unsaved street to a polygon.
 // @namespace       waze-ua
 // @grant           none
-// @version         2020.06.15.001
+// @version         2022.05.28.001
 // @include         https://*waze.com/*editor*
 // @exclude         https://*waze.com/*user/editor*
-// @updateURL       https://github.com/waze-ua/WME-PlaceNames-Plus/raw/master/wme-placenames-plus.user.js
-// @downloadURL     https://github.com/waze-ua/WME-PlaceNames-Plus/raw/master/wme-placenames-plus.user.js
+// @updateURL       https://github.com/waze-ua/wme-street-to-river-plus-mod/raw/master/wme_street_to_river_plus.user.js
+// @downloadURL     https://github.com/waze-ua/wme-street-to-river-plus-mod/raw/master/wme_street_to_river_plus.user.js
 // ==/UserScript==
 
 // Based on WME Street to river
@@ -122,6 +122,7 @@ function streetToRiver_init() {
     selRiverWidth.append($('<option value="12">12 ' + strMeters + '</option>'));
     selRiverWidth.append($('<option value="13">13 ' + strMeters + '</option>'));
     selRiverWidth.append($('<option value="15">15 ' + strMeters + '</option>'));
+    selRiverWidth.append($('<option value="17">17 ' + strMeters + '</option>'));
     selRiverWidth.append($('<option value="20">20 ' + strMeters + '</option>'));
     selRiverWidth.append($('<option value="25">25 ' + strMeters + '</option>'));
     selRiverWidth.append($('<option value="30">30 ' + strMeters + '</option>'));

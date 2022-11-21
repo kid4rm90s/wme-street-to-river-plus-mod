@@ -3,7 +3,7 @@
 // @description     This script create a new river landmark in waze map editor (WME). It transforms the the geometry of a new unsaved street to a polygon.
 // @namespace       waze-ua
 // @grant           none
-// @version         2022.06.15.001
+// @version         2022.11.21.001
 // @include         https://*waze.com/*editor*
 // @exclude         https://*waze.com/*user/editor*
 // @updateURL       https://github.com/waze-ua/wme-street-to-river-plus-mod/raw/master/wme_street_to_river_plus.user.js

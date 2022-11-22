@@ -3,7 +3,7 @@
 // @description     This script create a new river landmark in waze map editor (WME). It transforms the the geometry of a new unsaved street to a polygon.
 // @namespace       waze-ua
 // @grant           none
-// @version         2022.11.21.001
+// @version         2022.11.22.001
 // @include         https://*waze.com/*editor*
 // @exclude         https://*waze.com/*user/editor*
 // @updateURL       https://github.com/waze-ua/wme-street-to-river-plus-mod/raw/master/wme_street_to_river_plus.user.js
@@ -482,7 +482,23 @@ function streetToRiver_init() {
       // 2014-10-08: Add new Landmark to Waze Editor
       var riverLandmark_o = new wazeActionAddLandmark(riverLandmark);
       W.model.actionManager.add(riverLandmark_o);
-      W.selectionManager.setSelectedModels([riverLandmark]);
+      try {
+        W.selectionManager.setSelectedModels([riverLandmark]);
+      } catch (err) {
+        // Ignore error:
+          // Uncaught TypeError: Cannot read properties of undefined (reading 'children')
+          // at Object.WMETB_FPnewSelectionAvailable (FancyPermalink.min.js:216:184)
+          // at v (third_party-45fe9aba9d649e1fe91a.js.gz:2:1169484)
+          // at y (third_party-45fe9aba9d649e1fe91a.js.gz:2:1169276)
+          // at d (third_party-45fe9aba9d649e1fe91a.js.gz:2:1167229)
+          // at u.trigger (third_party-45fe9aba9d649e1fe91a.js.gz:2:1169169)
+          // at a.trigger (app-2a31f5b5c73203749066.js.gz:1:800910)
+          // at a.triggerEvent (app-2a31f5b5c73203749066.js.gz:1:801095)
+          // at ct._triggerSelectionChanged (app-2a31f5b5c73203749066.js.gz:1:858504)
+          // at ct.selectFeatures (app-2a31f5b5c73203749066.js.gz:1:857818)
+          // at ct.setSelectedModels (app-2a31f5b5c73203749066.js.gz:1:858137)
+        console_log(err)
+      }
 
       if (lmtype !== "OTHER") {
         console.log("bAddNew");

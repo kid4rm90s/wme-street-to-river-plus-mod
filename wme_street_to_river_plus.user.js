@@ -1,16 +1,16 @@
 // ==UserScript==
 // @name            WME Street to River PLUS (mod)
 // @description     This script create a new river landmark in waze map editor (WME). It transforms the the geometry of a new unsaved street to a polygon.
-// @namespace       https://greasyfork.org/ru/users/160654-waze-ukraine
+// @namespace       https://greasyfork.org/users/160654-waze-ukraine
 // @grant           none
-// @version         2023.07.21.001
-// @include         https://*waze.com/*editor*
-// @exclude         https://*waze.com/*user/editor*
-// @updateURL       https://greasyfork.org/scripts/457548-wme-street-to-river-plus-mod/code/WME%20Street%20to%20River%20PLUS%20(mod).user.js
-// @downloadURL     https://greasyfork.org/scripts/457548-wme-street-to-river-plus-mod/code/WME%20Street%20to%20River%20PLUS%20(mod).user.js
+// @version         2023.08.30.001
+// @match           https://beta.waze.com/*editor*
+// @match           https://www.waze.com/*editor*
+// @exclude         https://www.waze.com/*user/*editor/*
+// @updateURL       https://greasyfork.org/scripts/457548-wme-street-to-river-plus-mod
+// @downloadURL     https://greasyfork.org/scripts/457548-wme-street-to-river-plus-mod
 // @icon data:image/png;base64,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
 // @require         https://greasyfork.org/scripts/450160-wme-bootstrap/code/WME-Bootstrap.js
-// @require         https://greasyfork.org/scripts/450320-wme-ui/code/WME-UI.js
 // ==/UserScript==
 
 // Based on WME Street to river
@@ -27,28 +27,29 @@
 //
 // Updated by: Eduardo Carvajal
 
+/* jshint esversion: 11 */
 /* global W */
+/* global I18n */
 /* global OpenLayers */
 /* global $ */
 /* global require */
-/* global WMEUI */
+
+console.warn('Remove this line, when WME-Bootstrap will fix its syntax. now it causes script error on load, details https://stackoverflow.com/questions/42036349/uncaught-typeerror-intermediate-value-is-not-a-function');
 
 (function () {
-    'use strict';
+    const version = GM_info.script.version;
 
-    var version = GM_info.script.version;
-
-    var idMeters = 0;
-    var idWidth = 1;
-    var idTitle = 2;
-    var idStreetToRiver = 3;
-    var idUnlimitedSize = 4;
-    var idNoUsavedStreet = 5;
-    var idAllSegmentsInside = 6;
-    var idMultipleSegmentsInside = 7;
-    var idStreetToOther = 8;
-    var idStreetToForest = 9;
-    var idDeleteSegment = 10;
+    const idMeters = 0;
+    const idWidth = 1;
+    const idTitle = 2;
+    const idStreetToRiver = 3;
+    const idUnlimitedSize = 4;
+    const idNoUsavedStreet = 5;
+    const idAllSegmentsInside = 6;
+    const idMultipleSegmentsInside = 7;
+    const idStreetToOther = 8;
+    const idStreetToForest = 9;
+    const idDeleteSegment = 10;
 
     function streetToRiver_bootstrap() {
         $(document)
@@ -206,6 +207,25 @@
             doPOI(ev, "OTHER");
         }
 
+        function CalcRL(components) {
+            var count = components.length;
+            var j = count - 1;
+            var area = 0;
+
+            for (var i = 0; i < count; ++i) {
+                area += (components[i].y * components[j].x) - (components[i].x * components[j].y);
+                j = i;
+            }
+            return area < 0 ? 1 : -1; // 1 - по часовой, -1 - против часовой
+        }
+
+        function uniq(a) {
+            var seen = {};
+            return a.filter(function (item) {
+                return seen.hasOwnProperty(item) ? false : (seen[item] = true);
+            });
+        }
+
         // 2014-01-09: Base on selected helper street creates or expand an existing river/railway
         function convertToLandmark(sel, lmtype, isUnlimitedSize) {
             var i;
@@ -269,22 +289,22 @@
             for (var t in repo.objects) {
                 riverLandmark = repo.objects[t];
                 if (riverLandmark.attributes.categories[0] === lmtype) {
-                    console.log("riverLandmark.attributes.id=" + riverLandmark.attributes.id);
-                    console.log("streetVertices.length=" + streetVertices.length);
-                    console.log("streetVertices[0]=" + streetVertices[0]);
-                    console.log("streetVertices[1]=" + streetVertices[streetVertices.length - 1]);
+                    console_log("riverLandmark.attributes.id=" + riverLandmark.attributes.id);
+                    console_log("streetVertices.length=" + streetVertices.length);
+                    console_log("streetVertices[0]=" + streetVertices[0]);
+                    console_log("streetVertices[streetVertices.length - 1]=" + streetVertices[streetVertices.length - 1]);
 
                     // 2014-06-27: Verify if the landmark object has containsPoint function
                     if ("function" === typeof riverLandmark.geometry.containsPoint) {
                         if (riverLandmark.geometry.containsPoint(streetVertices[0])) {
                             bAddNew = false; // Street is inside an existing river
-                            console.log("rrr=" + riverLandmark.attributes.id);
+                            console_log("rrr=" + riverLandmark.attributes.id);
                             rrr = riverLandmark;
                             //             break;
                         }
                         if (riverLandmark.geometry.containsPoint(streetVertices[streetVertices.length - 1])) {
                             //                        bAddNew = false;    // Street is inside an existing river
-                            console.log("donorLandmark=" + riverLandmark.attributes.id);
+                            console_log("donorLandmark=" + riverLandmark.attributes.id);
                             donorLandmark = riverLandmark;
                             //             break;
                         }
@@ -431,8 +451,8 @@
                 riverLandmark.attributes.categories.push(lmtype);
 
                 // 2014-01-09: Add river's name base on Street Name
-                if (street && street.name) {
-                    riverLandmark.attributes.name = street.name.replace(/^\d+(m|ft)\s*/, '');
+                if (street && street.attributes.name) {
+                    riverLandmark.attributes.name = street.attributes.name.replace(/^\d+(m|м|ft)\s*/, ''); // TODO make localizable
                 }
 
                 // 2014-10-08: Add new Landmark to Waze Editor
@@ -449,16 +469,16 @@
                 }
 
                 if (lmtype !== "OTHER") {
-                    console.log("bAddNew");
-                    var address = riverLandmark.getAddress().attributes;
-                    console.log(address);
-                    var newAddressAtts = {
+                    console_log("bAddNew");
+                    let address = riverLandmark.getAddress().attributes;
+                    console_log(address);
+                    let newAddressAtts = {
                         streetName: null,
                         emptyStreet: true,
                         cityName: null,
                         emptyCity: true,
-                        stateID: address.state.id,
-                        countryID: address.country.id
+                        stateID: address.state.attributes.id,
+                        countryID: address.country.attributes.id
                     };
                     W.model.actionManager.add(new wazeActionUpdateFeatureAddress(riverLandmark, newAddressAtts, {
                             streetIDField: 'streetID'
@@ -466,24 +486,12 @@
                 }
 
             } else {
-                function CalcRL(components) {
-                    var count = components.length;
-                    var j = count - 1;
-                    var area = 0;
-
-                    for (var i = 0; i < count; ++i) {
-                        area += (components[i].y * components[j].x) - (components[i].x * components[j].y);
-                        j = i;
-                    }
-                    return area < 0 ? 1 : -1; // 1 - по часовой, -1 - против часовой
-                }
-
                 // 2014-01-09: Expand an existing river
                 var originalGeometry = riverLandmark.geometry.clone();
 
                 if (donorLandmark) // если есть донор
                 {
-                    var undoGeometry = riverLandmark.geometry.clone();
+                    let undoGeometry = riverLandmark.geometry.clone();
                     var undoGeometryDonor = donorLandmark.geometry.clone();
                     var components = riverLandmark.geometry.components[0].components;
                     var componentsDonor = donorLandmark.geometry.components[0].components;
@@ -494,12 +502,12 @@
                     // куда закручен массив?
                     var componentsRL = CalcRL(components);
                     var componentsDonorRL = CalcRL(componentsDonor);
-                    console.log("src=" + componentsRL + ", donor=" + componentsDonorRL);
+                    console_log("src=" + componentsRL + ", donor=" + componentsDonorRL);
                     // найти индекс ближайшей точки к началу сегмента
                     var dist = 1000000000;
                     var p1 = [0, 0],
                     p2 = [0, 0]; // индексы ближайших точек
-                    for (var i1 = 0; i1 < components.length; i1++) {
+                    for (let i1 = 0; i1 < components.length; i1++) {
                         var d1 = Math.sqrt(Math.pow(Math.abs(components[i1].x - streetVertices[0].x), 2) + Math.pow(Math.abs(components[i1].y - streetVertices[0].y), 2));
                         if (d1 < dist) {
                             dist = d1;
@@ -511,11 +519,11 @@
                         }
                     }
 
-                    console.log("p1=" + p1 + ", dist=" + dist);
+                    console_log("p1=" + p1 + ", dist=" + dist);
                     // ищем индекс во втором ПОИ, откуда начинать вставку.
                     dist = 1000000000;
-                    for (var i1 = 0; i1 < componentsDonor.length; i1++) {
-                        var d1 = Math.sqrt(Math.pow(Math.abs(componentsDonor[i1].x - streetVertices[streetVertices.length - 1].x), 2) + Math.pow(Math.abs(componentsDonor[i1].y - streetVertices[streetVertices.length - 1].y), 2));
+                    for (let i1 = 0; i1 < componentsDonor.length; i1++) {
+                        let d1 = Math.sqrt(Math.pow(Math.abs(componentsDonor[i1].x - streetVertices[streetVertices.length - 1].x), 2) + Math.pow(Math.abs(componentsDonor[i1].y - streetVertices[streetVertices.length - 1].y), 2));
                         if (d1 < dist) {
                             dist = d1;
                             p2[0] = i1;
@@ -525,66 +533,60 @@
                                 p2[1] = i1 == componentsDonor.length - 1 ? 0 : i1 + 1;
                         }
                     }
-                    console.log("p2=" + p2 + ", dist=" + dist);
+                    console_log("p2=" + p2 + ", dist=" + dist);
 
                     var componentsNew = components.slice();
                     componentsNew.length = 0;
 
                     // добавляем источник
-                    for (var i1 = 0; i1 <= p1[0]; ++i1)
+                    for (let i1 = 0; i1 <= p1[0]; ++i1)
                         componentsNew.push(components[i1]);
 
                     // добавляем донора
                     if (componentsRL < 0) {
                         if (componentsDonorRL < 0) {
                             // добавляем донора по кругу
-                            for (var i1 = p2[0]; i1 < componentsDonor.length; ++i1)
+                            for (let i1 = p2[0]; i1 < componentsDonor.length; ++i1)
                                 componentsNew.push(componentsDonor[i1]);
 
                             // ...остаток донора
-                            for (var i1 = 0; i1 < p2[0]; ++i1)
+                            for (let i1 = 0; i1 < p2[0]; ++i1)
                                 componentsNew.push(componentsDonor[i1]);
                         } else {
                             // добавляем донора по кругу
-                            for (var i1 = p2[0]; i1 >= 0; --i1)
+                            for (let i1 = p2[0]; i1 >= 0; --i1)
                                 componentsNew.push(componentsDonor[i1]);
 
                             // ...остаток донора
-                            for (var i1 = componentsDonor.length - 1; i1 > p2[0]; --i1)
+                            for (let i1 = componentsDonor.length - 1; i1 > p2[0]; --i1)
                                 componentsNew.push(componentsDonor[i1]);
                         }
                     } else {
                         if (componentsDonorRL < 0) {
                             // добавляем донора по кругу
-                            for (var i1 = p2[0]; i1 >= 0; --i1)
+                            for (let i1 = p2[0]; i1 >= 0; --i1)
                                 componentsNew.push(componentsDonor[i1]);
 
                             // ...остаток донора
-                            for (var i1 = componentsDonor.length - 1; i1 > p2[0]; --i1)
+                            for (let i1 = componentsDonor.length - 1; i1 > p2[0]; --i1)
                                 componentsNew.push(componentsDonor[i1]);
                         } else {
                             // добавляем донора по кругу
-                            for (var i1 = p2[0]; i1 < componentsDonor.length; ++i1)
+                            for (let i1 = p2[0]; i1 < componentsDonor.length; ++i1)
                                 componentsNew.push(componentsDonor[i1]);
 
                             // ...остаток донора
-                            for (var i1 = 0; i1 < p2[0]; ++i1)
+                            for (let i1 = 0; i1 < p2[0]; ++i1)
                                 componentsNew.push(componentsDonor[i1]);
                         }
                     }
 
                     // добавляем источник
-                    for (var i1 = p1[0] + 1; i1 < components.length; ++i1)
+                    for (let i1 = p1[0] + 1; i1 < components.length; ++i1)
                         componentsNew.push(components[i1]);
 
                     //window.componentsNew=componentsNew
                     // обновляемся
-                    function uniq(a) {
-                        var seen = {};
-                        return a.filter(function (item) {
-                            return seen.hasOwnProperty(item) ? false : (seen[item] = true);
-                        });
-                    }
                     riverLandmark.geometry.components[0].components = uniq(componentsNew);
 
                     W.model.actionManager.add(new wazeActionUpdateFeatureGeometry(riverLandmark, W.model.venues, undoGeometry, riverLandmark.geometry));
@@ -632,8 +634,6 @@
 
                 // 2013-06-01: Is river's Polygon clockwise or counter-clockwise?
 
-
-                console_log("indexNearestRiverVertice: " + indexNearestRiverVertice);
                 console_log("nextRiverVertice: " + nextRiverVertice);
 
                 console_log("firstPolyPoint:" + firstPolyPoint);
@@ -652,7 +652,7 @@
                 }
 
                 // 2013-06-03: Update river's polygon (add new vertices)
-                var indexLastPolyPoint = getNextIndex(index, polyPoints.length, -inc);
+                //var indexLastPolyPoint = getNextIndex(index, polyPoints.length, -inc);
                 var indexNextVertice = 1;
                 var index = polyPoints.length / 2 - 1;
 
@@ -663,7 +663,7 @@
                     if (!originalGeometry.containsPoint(polyPoints[index])) {
 
                         // 2014-01-09: Save's old Landmark
-                        var undoGeometry = riverLandmark.geometry.clone();
+                        let undoGeometry = riverLandmark.geometry.clone();
 
                         // 2014-01-09: Add a new point to existing river landmark
                         riverLandmark.geometry.components[0].addComponent(polyPoints[index], indexNearestRiverVertice + indexNextVertice);
@@ -684,16 +684,16 @@
                 //delete originalGeometry;
 
                 if (lmtype !== "OTHER") {
-                    console.log("!bAddNew");
-                    var address = riverLandmark.getAddress().attributes;
-                    console.log(address);
-                    var newAddressAtts = {
+                    console_log("!bAddNew");
+                    let address = riverLandmark.getAddress().attributes;
+                    console_log(address);
+                    let newAddressAtts = {
                         streetName: null,
                         emptyStreet: true,
                         cityName: null,
                         emptyCity: true,
-                        stateID: address.state.id,
-                        countryID: address.country.id
+                        stateID: address.state.attributes.id,
+                        countryID: address.country.attributes.id
                     };
                     W.model.actionManager.add(new wazeActionUpdateFeatureAddress(riverLandmark, newAddressAtts, {
                             streetIDField: 'streetID'
@@ -792,7 +792,7 @@
         // line B: y = cx + b
         //
         // x = (d - b) / (a - c)
-        function intersectX(eqa, eqb, defaultPoint) {
+        function intersectX(eqa, eqb) {
             if ("number" == typeof eqa.slope && "number" == typeof eqb.slope) {
                 if (eqa.slope == eqb.slope)
                     return null;
@@ -818,11 +818,11 @@
         function getDisplacement(street) {
             if (!street)
                 return getLastRiverWidth(defaultWidth);
-            if (!street.name)
+            if (!street.attributes.name)
                 return getLastRiverWidth(defaultWidth);
-            if (street.name.match(/^(\d+)m\b/))
+            if (street.attributes.name.match(/^(\d+)(m|м)\b/)) // TODO make localizable
                 return parseInt(RegExp.$1);
-            if (street.name.match(/^(\d+)ft\b/))
+            if (street.attributes.name.match(/^(\d+)ft\b/)) // TODO make localizable
                 return parseInt(RegExp.$1) * 0.3048;
             return getLastRiverWidth(defaultWidth);
         }

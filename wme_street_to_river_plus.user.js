@@ -3,7 +3,7 @@
 // @description     This script create a new river landmark in waze map editor (WME). It transforms the the geometry of a new unsaved street to a polygon.
 // @namespace       https://greasyfork.org/users/160654-waze-ukraine
 // @grant           none
-// @version         2023.08.30.001
+// @version         2023.12.04.001
 // @match           https://beta.waze.com/*editor*
 // @match           https://www.waze.com/*editor*
 // @exclude         https://www.waze.com/*user/*editor/*
@@ -446,7 +446,14 @@ console.warn('Remove this line, when WME-Bootstrap will fix its syntax. now it c
                 var polygon = new OpenLayers.Geometry.Polygon(new OpenLayers.Geometry.LinearRing(polyPoints));
 
                 // 2014-10-08: Creates river's Landmark
-                riverLandmark = new wazefeatureVectorLandmark();
+
+                //FIX (?????? Start)
+                //                riverLandmark = new wazefeatureVectorLandmark();
+                var ldk = {};
+                ldk.geoJSONGeometry = W.userscripts.toGeoJSONGeometry (polygon);
+                riverLandmark = new wazefeatureVectorLandmark(ldk);
+                //FIX (?????? End)
+
                 riverLandmark.geometry = polygon;
                 riverLandmark.attributes.categories.push(lmtype);
 

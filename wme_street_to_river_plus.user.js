@@ -3,7 +3,7 @@
 // @description     This script create a new river landmark in waze map editor (WME). It transforms the the geometry of a new unsaved street to a polygon.
 // @namespace       https://greasyfork.org/users/160654-waze-ukraine
 // @grant           none
-// @version         2023.12.04.001
+// @version         2024.01.24.001
 // @match           https://beta.waze.com/*editor*
 // @match           https://www.waze.com/*editor*
 // @exclude         https://www.waze.com/*user/*editor/*
@@ -178,8 +178,7 @@ console.warn('Remove this line, when WME-Bootstrap will fix its syntax. now it c
 
             // 2014-01-09: Search for helper street. If found create or expand a river
             for (var s = W.selectionManager.getSelectedFeatures().length - 1; s >= 0; s--) {
-                // var sel = W.selectionManager.getSelectedFeatures()[s].model;
-                var sel = W.selectionManager.getSelectedFeatures()[s].data.wazeFeature._wmeObject;
+                var sel = W.selectionManager.getSelectedFeatures()[s]._wmeObject;
                 if (sel.type == "segment") {
                     // found segment
                     foundSelectedSegment = true;

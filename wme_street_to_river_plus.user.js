@@ -3,7 +3,7 @@
 // @description     This script create a new river landmark in waze map editor (WME). It transforms the the geometry of a new unsaved street to a polygon.
 // @namespace       https://greasyfork.org/users/160654-waze-ukraine
 // @grant           none
-// @version         2024.01.25.001
+// @version         2024.06.08.001
 // @match           https://beta.waze.com/*editor*
 // @match           https://www.waze.com/*editor*
 // @exclude         https://www.waze.com/*user/*editor/*

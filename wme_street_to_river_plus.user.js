@@ -104,6 +104,9 @@ console.warn('Remove this line, when WME-Bootstrap will fix its syntax. now it c
             var strMeters = getString(idMeters);
 
             var selRiverWidth = $('<wz-select name="riverWidth" />');
+            selRiverWidth.append($('<wz-option value="1"> 1 ' + strMeters + '</wz-option>'));
+            selRiverWidth.append($('<wz-option value="2"> 2 ' + strMeters + '</wz-option>'));
+            selRiverWidth.append($('<wz-option value="3"> 3 ' + strMeters + '</wz-option>'));
             selRiverWidth.append($('<wz-option value="5"> 5 ' + strMeters + '</wz-option>'));
             selRiverWidth.append($('<wz-option value="8"> 8 ' + strMeters + '</wz-option>'));
             selRiverWidth.append($('<wz-option value="10">10 ' + strMeters + '</wz-option>'));

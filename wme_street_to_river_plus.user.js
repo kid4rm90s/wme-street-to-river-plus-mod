@@ -3,12 +3,12 @@
 // @description     This script create a new river landmark in waze map editor (WME). It transforms the the geometry of a new unsaved street to a polygon.
 // @namespace       https://greasyfork.org/users/160654-waze-ukraine
 // @grant           none
-// @version         2024.06.08.001
+// @version         2024.06.30.001
 // @match           https://beta.waze.com/*editor*
 // @match           https://www.waze.com/*editor*
 // @exclude         https://www.waze.com/*user/*editor/*
 // @icon data:image/png;base64,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
-// @require         https://greasyfork.org/scripts/450160-wme-bootstrap/code/WME-Bootstrap.js
+// @require         https://update.greasyfork.org/scripts/450160/1218867/WME-Bootstrap.js
 // @downloadURL https://update.greasyfork.org/scripts/457548/WME%20Street%20to%20River%20PLUS%20%28mod%29.user.js
 // @updateURL https://update.greasyfork.org/scripts/457548/WME%20Street%20to%20River%20PLUS%20%28mod%29.meta.js
 // ==/UserScript==
@@ -39,7 +39,7 @@ console.warn('Remove this line, when WME-Bootstrap will fix its syntax. now it c
 (function () {
     const version = GM_info.script.version;
 
-    const idMeters = 0;
+    //const unused = 0;
     const idWidth = 1;
     const idTitle = 2;
     const idStreetToRiver = 3;
@@ -59,7 +59,6 @@ console.warn('Remove this line, when WME-Bootstrap will fix its syntax. now it c
     }
 
     function streetToRiver_init() {
-
         const defaultWidth = 15;
         var scriptLanguage = "us";
         var langText;{
@@ -88,7 +87,6 @@ console.warn('Remove this line, when WME-Bootstrap will fix its syntax. now it c
         }
 
         function insertButtons() {
-
             if (W.selectionManager.getSelectedFeatures().length === 0)
                 return;
 
@@ -101,31 +99,12 @@ console.warn('Remove this line, when WME-Bootstrap will fix its syntax. now it c
             var btn2 = $('<wz-button size="sm" color="submit" title="' + getString(idTitle) + '">' + getString(idStreetToForest) + '</wz-button>');
             btn2.click(doForest);
 
-            var strMeters = getString(idMeters);
-
+            const widthValues = [1, 2, 3, 5, 8, 10, 11, 12, 13, 15, 17, 20, 25, 30, 40, 50, 80, 100, 120, 150, 180, 200];
+            
             var selRiverWidth = $('<wz-select name="riverWidth" />');
-            selRiverWidth.append($('<wz-option value="1"> 1 ' + strMeters + '</wz-option>'));
-            selRiverWidth.append($('<wz-option value="2"> 2 ' + strMeters + '</wz-option>'));
-            selRiverWidth.append($('<wz-option value="3"> 3 ' + strMeters + '</wz-option>'));
-            selRiverWidth.append($('<wz-option value="5"> 5 ' + strMeters + '</wz-option>'));
-            selRiverWidth.append($('<wz-option value="8"> 8 ' + strMeters + '</wz-option>'));
-            selRiverWidth.append($('<wz-option value="10">10 ' + strMeters + '</wz-option>'));
-            selRiverWidth.append($('<wz-option value="11">11 ' + strMeters + '</wz-option>'));
-            selRiverWidth.append($('<wz-option value="12">12 ' + strMeters + '</wz-option>'));
-            selRiverWidth.append($('<wz-option value="13">13 ' + strMeters + '</wz-option>'));
-            selRiverWidth.append($('<wz-option value="15">15 ' + strMeters + '</wz-option>'));
-            selRiverWidth.append($('<wz-option value="17">17 ' + strMeters + '</wz-option>'));
-            selRiverWidth.append($('<wz-option value="20">20 ' + strMeters + '</wz-option>'));
-            selRiverWidth.append($('<wz-option value="25">25 ' + strMeters + '</wz-option>'));
-            selRiverWidth.append($('<wz-option value="30">30 ' + strMeters + '</wz-option>'));
-            selRiverWidth.append($('<wz-option value="40">40 ' + strMeters + '</wz-option>'));
-            selRiverWidth.append($('<wz-option value="50">50 ' + strMeters + '</wz-option>'));
-            selRiverWidth.append($('<wz-option value="80">80 ' + strMeters + '</wz-option>'));
-            selRiverWidth.append($('<wz-option value="100">100 ' + strMeters + '</wz-option>'));
-            selRiverWidth.append($('<wz-option value="120">120 ' + strMeters + '</wz-option>'));
-            selRiverWidth.append($('<wz-option value="150">150 ' + strMeters + '</wz-option>'));
-            selRiverWidth.append($('<wz-option value="180">180 ' + strMeters + '</wz-option>'));
-            selRiverWidth.append($('<wz-option value="200">200 ' + strMeters + '</wz-option>'));
+            for (let w = 0; w < widthValues.length; w++) {
+                selRiverWidth.append($(`<wz-option value="${widthValues[w]}">${widthValues[w]}</wz-option>`));
+            }
             selRiverWidth.change(function () {
                 setLastRiverWidth(this.value);
             });
@@ -166,7 +145,7 @@ console.warn('Remove this line, when WME-Bootstrap will fix its syntax. now it c
             cnt.append(divGroup2);
             cnt.append(divGroup3);
 
-            $("#edit-panel .more-actions").after(cnt);
+            $("#segment-edit-general form.attributes-form").after(cnt);
 
             console_log("Street to River Language: " + scriptLanguage);
             console_log("Street to river PLUS initialized");
@@ -939,47 +918,47 @@ console.warn('Remove this line, when WME-Bootstrap will fix its syntax. now it c
             switch (getLanguage()) {
             case "es": // 2014-06-05: Spanish
             case "es-419":
-                langText = new Array("metros", "Ancho", "Cree una nueva calle, selecciónela y oprima este botón.", "Calle a Río", "Tamaño ilimitado",
+                langText = new Array("", "Ancho (metros)", "Cree una nueva calle, selecciónela y oprima este botón.", "Calle a Río", "Tamaño ilimitado",
                         "¡No se encontró una calle sin guardar!", "Todos los segmentos de la calle adentro del río. No se puede continuar.",
                         "Múltiples segmentos de la calle dentro del río. No se puede continuar", "Other", "Forest", "Delete segment");
                 break;
             case "fr": // 2014-06-05: French
-                langText = new Array("mètres", "Largura", "Crie uma nova rua, a selecione e clique neste botão.", "Rue á rivière", "Taille illimitée (dangereux)",
+                langText = new Array("", "Largura (mètres)", "Crie uma nova rua, a selecione e clique neste botão.", "Rue á rivière", "Taille illimitée (dangereux)",
                         "Pas de nouvelle rue non enregistré trouvée!", "Tous les segments de la rue dans la rivière. Vous ne pouvez pas continuer.",
                         "Plusieurs segments de rues à l'intérieur de la rivière. Vous ne pouvez pas continuer.", "Other", "Forest", "Delete segment");
                 break;
             case "ru": // 2014-06-05: Russian
-                langText = new Array("метров", "Ширина", "Создайте новую дорогу (не сохраняйте), выберите ее и нажмите эту кнопку.", "Река", "Вся длина",
+                langText = new Array("", "Ширина (в метрах)", "Создайте новую дорогу (не сохраняйте), выберите ее и нажмите эту кнопку.", "Река", "Вся длина",
                         "Не выделено ни одной не сохраненной дороги!", "Все сегменты дороги находятся внутри реки. Преобразование невозможно.",
                         "Слишком много сегментов дороги находится внутри реки. Преобразование невозможно.", "Контур", "Лес", "Удалить сегмент");
                 break;
             case "uk": // 2018-05-03: Ukrainian
-                langText = new Array("метрів", "Ширина", "Створіть нову дорогу (не зберігайте і не знімайте виділення) та натисніть цю кнопку.", "Ріка", "Безлімітна довжина (небезпечно)",
+                langText = new Array("", "Ширина (в метрах)", "Створіть нову дорогу (не зберігайте і не знімайте виділення) та натисніть цю кнопку.", "Ріка", "Безлімітна довжина (небезпечно)",
                         "Не виділено жодної збереженої дороги!", "Усі сегменти дороги знаходяться всередині ріки. Перетворення неможливе.",
                         "Занадто багато сегментів дороги знаходяться всередині ріки. Перетворення неможливе.", "Контур", "Ліс", "Видалити сегмент");
                 break;
             case "hu": // 2014-07-02: Hungarian
-                langText = new Array("méter", "Szélesség", "Hozzon létre egy új utcát, válassza ki, majd kattintson erre a gombra.", "Utcából folyó", "Korlátlan méretű (nem biztonságos)",
+                langText = new Array("", "Szélesség (méter)", "Hozzon létre egy új utcát, válassza ki, majd kattintson erre a gombra.", "Utcából folyó", "Korlátlan méretű (nem biztonságos)",
                         "Nem található nem mentett és kiválasztott új utca!", "Az útszakasz a folyón belül található! Nem lehet folytatni.",
                         "Minden útszakasz a folyón belül található! Nem lehet folytatni.", "Other", "Forest", "Delete segment");
                 break;
             case "cs": // 2014-07-03: Czech
-                langText = new Array("metrů", "Šířka", "Vytvořte osu řeky, vyberte segment a stiskněte toto tlačítko.", "Silnice na řeku", "Neomezená šířka (nebezpečné)",
+                langText = new Array("", "Šířka (metrů)", "Vytvořte osu řeky, vyberte segment a stiskněte toto tlačítko.", "Silnice na řeku", "Neomezená šířka (nebezpečné)",
                         "Nebyly vybrány žádné neuložené segmenty!", "Všechny segmenty jsou uvnitř řeky! Nelze pokračovat.",
                         "Uvnitř řeky je více segmentů! Nelze pokračovat.", "Other", "Forest", "Delete segment");
                 break;
             case "pl": // 2014-11-08: Polish - By Zniwek
-                langText = new Array("metrów", "Szerokość", "Stwórz ulicę, wybierz ją i kliknij ten przycisk.", "Ulica w Rzekę", "Nieskończony rozmiar (niebezpieczne)",
+                langText = new Array("", "Szerokość (w metrach)", "Stwórz ulicę, wybierz ją i kliknij ten przycisk.", "Ulica w Rzekę", "Nieskończony rozmiar (niebezpieczne)",
                         "Nie znaleziono nowej i niezapisanej ulicy!", "Wszystkie segmenty ulicy wewnątrz rzeki. Nie mogę kontynuować.",
                         "Wiele segmentów ulicy wewnątrz rzeki. Nie mogę kontynuować.", "Other", "Forest", "Delete segment");
                 break;
             case "pt-br": // 2015-04-05: Portuguese - By esmota
-                langText = new Array("metros", "Largura", "Criar uma nova rua, selecione e clique neste botão.", "Rua para Rio", "Comprimento ilimitado (instável)",
+                langText = new Array("", "Largura (metros)", "Criar uma nova rua, selecione e clique neste botão.", "Rua para Rio", "Comprimento ilimitado (instável)",
                         "Nenhuma nova rua, sem salvar, selecionada!", "Todos os segmentos de rua estão dentro de um rio. Nada a fazer.",
                         "Múltiplos segmentos de rua dentro de um rio. Impossível continuar.", "Other", "Forest", "Delete segment");
                 break;
             default: // 2014-06-05: English
-                langText = new Array("meters", "Width", "Create a new street, select and click this button.", "River", "Unlimited size (unsafe)",
+                langText = new Array("", "Width (in meters)", "Create a new street, select and click this button.", "River", "Unlimited size (unsafe)",
                         "No unsaved and selected new street found!", "All street segments inside river. Cannot continue.",
                         "Multiple street segments inside river. Cannot continue.", "Other", "Forest", "Delete segment");
             }
@@ -1001,10 +980,15 @@ console.warn('Remove this line, when WME-Bootstrap will fix its syntax. now it c
         scriptLanguage = getLanguage();
         intLanguageStrings();
 
-        $(document)
-        .on('segment.wme', (event, element, model) => {
-            insertButtons()
-        })
+        W.selectionManager.events.register(
+          'selectionchanged',
+          null,
+          insertButtons
+        )
+        //$(document)
+        //.on('segment.wme', (event, element, model) => {
+        //    insertButtons()
+        //})
     }
 
     streetToRiver_bootstrap();

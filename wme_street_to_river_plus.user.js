@@ -3,7 +3,7 @@
 // @description     This script create a new river landmark in waze map editor (WME). It transforms the the geometry of a new unsaved street to a polygon.
 // @namespace       https://greasyfork.org/users/160654-waze-ukraine
 // @grant           none
-// @version         2024.06.30.001
+// @version         2025.05.01.001
 // @match           https://beta.waze.com/*editor*
 // @match           https://www.waze.com/*editor*
 // @exclude         https://www.waze.com/*user/*editor/*
@@ -61,7 +61,8 @@ console.warn('Remove this line, when WME-Bootstrap will fix its syntax. now it c
     function streetToRiver_init() {
         const defaultWidth = 15;
         var scriptLanguage = "us";
-        var langText;{
+        var langText;
+        {
             var Config = [{
                     handler: 'WME-Street-to-River_other',
                     title: "Other",
@@ -87,7 +88,7 @@ console.warn('Remove this line, when WME-Bootstrap will fix its syntax. now it c
         }
 
         function insertButtons() {
-            if (W.selectionManager.getSelectedFeatures().length === 0)
+            if (W.selectionManager.getSelectedWMEFeatures().length === 0)
                 return;
 
             var btn0 = $('<wz-button size="sm" color="submit" title="' + getString(idTitle) + '">' + getString(idStreetToOther) + '</wz-button>');
@@ -100,7 +101,7 @@ console.warn('Remove this line, when WME-Bootstrap will fix its syntax. now it c
             btn2.click(doForest);
 
             const widthValues = [1, 2, 3, 5, 8, 10, 11, 12, 13, 15, 17, 20, 25, 30, 40, 50, 80, 100, 120, 150, 180, 200];
-            
+
             var selRiverWidth = $('<wz-select name="riverWidth" />');
             for (let w = 0; w < widthValues.length; w++) {
                 selRiverWidth.append($(`<wz-option value="${widthValues[w]}">${widthValues[w]}</wz-option>`));
@@ -159,8 +160,8 @@ console.warn('Remove this line, when WME-Bootstrap will fix its syntax. now it c
             var isDeleteSegment = getLastIsDeleteSegment(true);
 
             // 2014-01-09: Search for helper street. If found create or expand a river
-            for (var s = W.selectionManager.getSelectedFeatures().length - 1; s >= 0; s--) {
-                var sel = W.selectionManager.getSelectedFeatures()[s]._wmeObject;
+            for (var s = W.selectionManager.getSelectedWMEFeatures().length - 1; s >= 0; s--) {
+                var sel = W.selectionManager.getSelectedWMEFeatures()[s]._wmeObject;
                 if (sel.type == "segment") {
                     // found segment
                     foundSelectedSegment = true;
@@ -980,15 +981,15 @@ console.warn('Remove this line, when WME-Bootstrap will fix its syntax. now it c
         scriptLanguage = getLanguage();
         intLanguageStrings();
 
-        W.selectionManager.events.register(
-          'selectionchanged',
-          null,
-          insertButtons
-        )
-        //$(document)
-        //.on('segment.wme', (event, element, model) => {
-        //    insertButtons()
-        //})
+        //W.selectionManager.events.register(
+        //  'selectionchanged',
+        //  null,
+        //  insertButtons
+        //)
+        $(document)
+        .on('segment.wme', (event, element, model) => {
+            insertButtons()
+        })
     }
 
     streetToRiver_bootstrap();

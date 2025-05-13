@@ -100,7 +100,7 @@ console.warn('Remove this line, when WME-Bootstrap will fix its syntax. now it c
 
             var btn2 = $('<wz-button size="sm" color="submit" title="' + getString(idTitle) + '">' + getString(idStreetToForest) + '</wz-button>');
             btn2.click(doForest);
-			var btn3 = $('<wz-button size="sm" color="submit" title="' + getString(idTitle) + '">' + getString(idStreetToCanal) + '</wz-button>');
+	    var btn3 = $('<wz-button size="sm" color="submit" title="' + getString(idTitle) + '">' + getString(idStreetToCanal) + '</wz-button>');
             btn3.click(doCanal);
 
             const widthValues = [1, 2, 3, 5, 8, 10, 11, 12, 13, 15, 17, 20, 25, 30, 40, 50, 80, 100, 120, 150, 180, 200];

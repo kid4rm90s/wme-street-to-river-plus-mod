@@ -3,7 +3,7 @@
 // @description     This script create a new river landmark in waze map editor (WME). It transforms the the geometry of a new unsaved street to a polygon.
 // @namespace       https://greasyfork.org/users/160654-waze-ukraine
 // @grant           none
-// @version         2025.05.01.001
+// @version         2025.05.13.001
 // @match           https://beta.waze.com/*editor*
 // @match           https://www.waze.com/*editor*
 // @exclude         https://www.waze.com/*user/*editor/*
@@ -50,6 +50,7 @@ console.warn('Remove this line, when WME-Bootstrap will fix its syntax. now it c
     const idStreetToOther = 8;
     const idStreetToForest = 9;
     const idDeleteSegment = 10;
+	const idStreetToCanal = 11;
 
     function streetToRiver_bootstrap() {
         $(document)
@@ -99,6 +100,8 @@ console.warn('Remove this line, when WME-Bootstrap will fix its syntax. now it c
 
             var btn2 = $('<wz-button size="sm" color="submit" title="' + getString(idTitle) + '">' + getString(idStreetToForest) + '</wz-button>');
             btn2.click(doForest);
+			var btn3 = $('<wz-button size="sm" color="submit" title="' + getString(idTitle) + '">' + getString(idStreetToCanal) + '</wz-button>');
+            btn3.click(doCanal);
 
             const widthValues = [1, 2, 3, 5, 8, 10, 11, 12, 13, 15, 17, 20, 25, 30, 40, 50, 80, 100, 120, 150, 180, 200];
 
@@ -141,6 +144,7 @@ console.warn('Remove this line, when WME-Bootstrap will fix its syntax. now it c
             divGroup3.append(btn0);
             divGroup3.append(btn1);
             divGroup3.append(btn2);
+			divGroup3.append(btn3);
 
             cnt.append(divGroup1);
             cnt.append(divGroup2);
@@ -187,6 +191,9 @@ console.warn('Remove this line, when WME-Bootstrap will fix its syntax. now it c
         }
         function doOther(ev) {
             doPOI(ev, "OTHER");
+        }
+		function doCanal(ev) {
+            doPOI(ev, "CANAL");
         }
 
         function CalcRL(components) {
@@ -921,47 +928,47 @@ console.warn('Remove this line, when WME-Bootstrap will fix its syntax. now it c
             case "es-419":
                 langText = new Array("", "Ancho (metros)", "Cree una nueva calle, selecciónela y oprima este botón.", "Calle a Río", "Tamaño ilimitado",
                         "¡No se encontró una calle sin guardar!", "Todos los segmentos de la calle adentro del río. No se puede continuar.",
-                        "Múltiples segmentos de la calle dentro del río. No se puede continuar", "Other", "Forest", "Delete segment");
+                        "Múltiples segmentos de la calle dentro del río. No se puede continuar", "Other", "Forest", "Delete segment", "Canal");
                 break;
             case "fr": // 2014-06-05: French
                 langText = new Array("", "Largura (mètres)", "Crie uma nova rua, a selecione e clique neste botão.", "Rue á rivière", "Taille illimitée (dangereux)",
                         "Pas de nouvelle rue non enregistré trouvée!", "Tous les segments de la rue dans la rivière. Vous ne pouvez pas continuer.",
-                        "Plusieurs segments de rues à l'intérieur de la rivière. Vous ne pouvez pas continuer.", "Other", "Forest", "Delete segment");
+                        "Plusieurs segments de rues à l'intérieur de la rivière. Vous ne pouvez pas continuer.", "Other", "Forest", "Delete segment", "Canal");
                 break;
             case "ru": // 2014-06-05: Russian
                 langText = new Array("", "Ширина (в метрах)", "Создайте новую дорогу (не сохраняйте), выберите ее и нажмите эту кнопку.", "Река", "Вся длина",
                         "Не выделено ни одной не сохраненной дороги!", "Все сегменты дороги находятся внутри реки. Преобразование невозможно.",
-                        "Слишком много сегментов дороги находится внутри реки. Преобразование невозможно.", "Контур", "Лес", "Удалить сегмент");
+                        "Слишком много сегментов дороги находится внутри реки. Преобразование невозможно.", "Контур", "Лес", "Удалить сегмент", "Канал");
                 break;
             case "uk": // 2018-05-03: Ukrainian
                 langText = new Array("", "Ширина (в метрах)", "Створіть нову дорогу (не зберігайте і не знімайте виділення) та натисніть цю кнопку.", "Ріка", "Безлімітна довжина (небезпечно)",
                         "Не виділено жодної збереженої дороги!", "Усі сегменти дороги знаходяться всередині ріки. Перетворення неможливе.",
-                        "Занадто багато сегментів дороги знаходяться всередині ріки. Перетворення неможливе.", "Контур", "Ліс", "Видалити сегмент");
+                        "Занадто багато сегментів дороги знаходяться всередині ріки. Перетворення неможливе.", "Контур", "Ліс", "Видалити сегмент", "Канал");
                 break;
             case "hu": // 2014-07-02: Hungarian
                 langText = new Array("", "Szélesség (méter)", "Hozzon létre egy új utcát, válassza ki, majd kattintson erre a gombra.", "Utcából folyó", "Korlátlan méretű (nem biztonságos)",
                         "Nem található nem mentett és kiválasztott új utca!", "Az útszakasz a folyón belül található! Nem lehet folytatni.",
-                        "Minden útszakasz a folyón belül található! Nem lehet folytatni.", "Other", "Forest", "Delete segment");
+                        "Minden útszakasz a folyón belül található! Nem lehet folytatni.", "Other", "Forest", "Delete segment", "Canal");
                 break;
             case "cs": // 2014-07-03: Czech
                 langText = new Array("", "Šířka (metrů)", "Vytvořte osu řeky, vyberte segment a stiskněte toto tlačítko.", "Silnice na řeku", "Neomezená šířka (nebezpečné)",
                         "Nebyly vybrány žádné neuložené segmenty!", "Všechny segmenty jsou uvnitř řeky! Nelze pokračovat.",
-                        "Uvnitř řeky je více segmentů! Nelze pokračovat.", "Other", "Forest", "Delete segment");
+                        "Uvnitř řeky je více segmentů! Nelze pokračovat.", "Other", "Forest", "Delete segment", "Canal");
                 break;
             case "pl": // 2014-11-08: Polish - By Zniwek
                 langText = new Array("", "Szerokość (w metrach)", "Stwórz ulicę, wybierz ją i kliknij ten przycisk.", "Ulica w Rzekę", "Nieskończony rozmiar (niebezpieczne)",
                         "Nie znaleziono nowej i niezapisanej ulicy!", "Wszystkie segmenty ulicy wewnątrz rzeki. Nie mogę kontynuować.",
-                        "Wiele segmentów ulicy wewnątrz rzeki. Nie mogę kontynuować.", "Other", "Forest", "Delete segment");
+                        "Wiele segmentów ulicy wewnątrz rzeki. Nie mogę kontynuować.", "Other", "Forest", "Delete segment", "Canal");
                 break;
             case "pt-br": // 2015-04-05: Portuguese - By esmota
                 langText = new Array("", "Largura (metros)", "Criar uma nova rua, selecione e clique neste botão.", "Rua para Rio", "Comprimento ilimitado (instável)",
                         "Nenhuma nova rua, sem salvar, selecionada!", "Todos os segmentos de rua estão dentro de um rio. Nada a fazer.",
-                        "Múltiplos segmentos de rua dentro de um rio. Impossível continuar.", "Other", "Forest", "Delete segment");
+                        "Múltiplos segmentos de rua dentro de um rio. Impossível continuar.", "Other", "Forest", "Delete segment", "Canal");
                 break;
             default: // 2014-06-05: English
                 langText = new Array("", "Width (in meters)", "Create a new street, select and click this button.", "River", "Unlimited size (unsafe)",
                         "No unsaved and selected new street found!", "All street segments inside river. Cannot continue.",
-                        "Multiple street segments inside river. Cannot continue.", "Other", "Forest", "Delete segment");
+                        "Multiple street segments inside river. Cannot continue.", "Other", "Forest", "Delete segment", "Canal");
             }
         }
 

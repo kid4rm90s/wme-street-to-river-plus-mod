@@ -50,7 +50,7 @@ console.warn('Remove this line, when WME-Bootstrap will fix its syntax. now it c
     const idStreetToOther = 8;
     const idStreetToForest = 9;
     const idDeleteSegment = 10;
-	const idStreetToCanal = 11;
+    const idStreetToCanal = 11;
 
     function streetToRiver_bootstrap() {
         $(document)
@@ -144,7 +144,7 @@ console.warn('Remove this line, when WME-Bootstrap will fix its syntax. now it c
             divGroup3.append(btn0);
             divGroup3.append(btn1);
             divGroup3.append(btn2);
-			divGroup3.append(btn3);
+  	    divGroup3.append(btn3);
 
             cnt.append(divGroup1);
             cnt.append(divGroup2);
@@ -192,7 +192,7 @@ console.warn('Remove this line, when WME-Bootstrap will fix its syntax. now it c
         function doOther(ev) {
             doPOI(ev, "OTHER");
         }
-		function doCanal(ev) {
+	function doCanal(ev) {
             doPOI(ev, "CANAL");
         }
 

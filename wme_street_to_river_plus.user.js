@@ -3,7 +3,7 @@
 // @description     This script create a new river landmark in waze map editor (WME). It transforms the the geometry of a new unsaved street to a polygon.
 // @namespace       https://greasyfork.org/users/160654-waze-ukraine
 // @grant           none
-// @version         2025.05.13.001
+// @version         2025.06.25.001
 // @match           https://beta.waze.com/*editor*
 // @match           https://www.waze.com/*editor*
 // @exclude         https://www.waze.com/*user/*editor/*
@@ -64,17 +64,51 @@ console.warn('Remove this line, when WME-Bootstrap will fix its syntax. now it c
         var scriptLanguage = "us";
         var langText;
         {
-            var Config = [{
-                    handler: 'WME-Street-to-River_other',
-                    title: "Other",
-                    func: function (ev) {
-                        doPOI(ev, "OTHER");
-                    },
-                    key: -1,
-                    arg: {
-                        type: "OTHER"
-                    }
+            var Config = [
+              {
+                handler: 'WME-Street-to-River_other',
+                title: 'Other',
+                func: function (ev) {
+                  doPOI(ev, 'OTHER');
                 },
+                key: -1,
+                arg: {
+                  type: 'OTHER',
+                },
+              },
+              {
+                handler: 'WME-Street-to-River_river',
+                title: 'River',
+                func: function (ev) {
+                  doPOI(ev, 'RIVER_STREAM');
+                },
+                key: -1,
+                arg: {
+                  type: 'RIVER_STREAM',
+                },
+              },
+              {
+                handler: 'WME-Street-to-River_forest',
+                title: 'Forest',
+                func: function (ev) {
+                  doPOI(ev, 'FOREST_GROVE');
+                },
+                key: -1,
+                arg: {
+                  type: 'FOREST_GROVE',
+                },
+              },
+              {
+                handler: 'WME-Street-to-River_canal',
+                title: 'Canal',
+                func: function (ev) {
+                  doPOI(ev, 'CANAL');
+                },
+                key: -1,
+                arg: {
+                  type: 'CANAL',
+                },
+              },
             ];
 
             for (var i = 0; i < Config.length; ++i) {

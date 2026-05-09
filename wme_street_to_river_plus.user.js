@@ -3,7 +3,7 @@
 // @description     This script create a new river landmark in waze map editor (WME). It transforms the the geometry of a new unsaved street to a polygon.
 // @namespace       https://greasyfork.org/users/160654-waze-ukraine
 // @grant           none
-// @version         2025.11.29.001
+// @version         2026.05.09.003
 // @match           https://beta.waze.com/*editor*
 // @match           https://www.waze.com/*editor*
 // @exclude         https://www.waze.com/*user/*editor/*
@@ -18,8 +18,10 @@
 // Mini howto:
 // 1) install this script as greasemonkey script or chrome extension
 // 2) draw a new street but do not save the street
-// 3) add and apply a street name to define the rivers name and the the width of the river
-//    Example: "20m Spree" creates a 20 meters width river named "Spree"
+// 3) add and apply a street name to define the rivers name and the width of the river
+//    Example: "20m Spree" — constant 20 m width, named "Spree"
+//    Example: "5m-15m Spree" (or 5м–15м) — width from 5 m at the first vertex to 15 m at the last, along segment length
+//    If the name has no width prefix, use the panel: either one width for the whole river (checkbox) or start and end selects.
 // 4) Select the helper street
 // 5) Click the "Street to river" button
 // 4) Delete the helper street
@@ -51,6 +53,16 @@ console.warn('Remove this line, when WME-Bootstrap will fix its syntax. now it c
   const idStreetToForest = 9
   const idDeleteSegment = 10
   const idStreetToCanal = 11
+  const idWidthEnd = 12
+  const idWidthUniform = 13
+
+  const WIDTH_MIN = 0.5
+  const WIDTH_MAX = 2000
+  const WIDTH_SELECT_VALUES = (function () {
+    var a = []
+    for (var wi = 1; wi <= 10; wi++) a.push(wi)
+    return a.concat([11, 12, 13, 15, 17, 20, 25, 30, 40, 50, 80, 100, 120, 150, 180, 200])
+  })()
 
   function streetToRiver_bootstrap () {
     $(document)
@@ -137,19 +149,57 @@ console.warn('Remove this line, when WME-Bootstrap will fix its syntax. now it c
       var btn3 = $('<wz-button size="sm" color="submit" title="' + getString(idTitle) + '">' + getString(idStreetToCanal) + '</wz-button>')
       btn3.click(doCanal)
 
-      const widthValues = [1, 2, 3, 5, 8, 10, 11, 12, 13, 15, 17, 20, 25, 30, 40, 50, 80, 100, 120, 150, 180, 200]
-
       var selRiverWidth = $('<wz-select name="riverWidth" />')
-      for (let w = 0; w < widthValues.length; w++) {
-        selRiverWidth.append($(`<wz-option value="${widthValues[w]}">${widthValues[w]}</wz-option>`))
+      for (let w = 0; w < WIDTH_SELECT_VALUES.length; w++) {
+        selRiverWidth.append($(`<wz-option value="${WIDTH_SELECT_VALUES[w]}">${WIDTH_SELECT_VALUES[w]}</wz-option>`))
       }
       selRiverWidth.change(function () {
         setLastRiverWidth(this.value)
+        if (chkUniformWidth.prop('checked')) {
+          setLastRiverWidthEnd(this.value)
+          selRiverWidthEnd.val(this.value)
+        }
       })
 
       var lastRiverWidth = getLastRiverWidth(defaultWidth)
       console_log('Last river width: ' + lastRiverWidth)
       selRiverWidth.val(lastRiverWidth)
+
+      var selRiverWidthEnd = $('<wz-select name="riverWidthEnd" />')
+      for (let we = 0; we < WIDTH_SELECT_VALUES.length; we++) {
+        selRiverWidthEnd.append($(`<wz-option value="${WIDTH_SELECT_VALUES[we]}">${WIDTH_SELECT_VALUES[we]}</wz-option>`))
+      }
+      selRiverWidthEnd.change(function () {
+        setLastRiverWidthEnd(this.value)
+      })
+      var lastRiverWidthEnd = getLastRiverWidthEnd(defaultWidth)
+      selRiverWidthEnd.val(lastRiverWidthEnd)
+      if (getLastRiverWidthUniform(true)) {
+        setLastRiverWidthEnd(lastRiverWidth)
+        selRiverWidthEnd.val(lastRiverWidth)
+      }
+
+      var chkUniformWidth = $('<wz-checkbox name="_riverWidthUniform">' + getString(idWidthUniform) + '</wz-checkbox>')
+      chkUniformWidth.prop('checked', getLastRiverWidthUniform(true))
+      chkUniformWidth.change(function () {
+        setLastRiverWidthUniform(this.checked)
+        if (this.checked) {
+          var v = selRiverWidth.val()
+          setLastRiverWidthEnd(v)
+          selRiverWidthEnd.val(v)
+        }
+        updateRiverWidthPanelTaperVisibility()
+      })
+
+      var wrapTaperWidths = $('<span class="str2riv-taper-widths" style="display:inline-flex;flex-wrap:wrap;align-items:center;gap:6px" />')
+      wrapTaperWidths.append($('<wz-label html-for>' + getString(idWidthEnd) + '</wz-label>'))
+      wrapTaperWidths.append(selRiverWidthEnd)
+
+      function updateRiverWidthPanelTaperVisibility () {
+        var showTaper = !chkUniformWidth.prop('checked')
+        wrapTaperWidths.css('display', showTaper ? 'inline-flex' : 'none')
+      }
+      updateRiverWidthPanelTaperVisibility()
 
       var chk = $('<wz-checkbox title="' + getString(idUnlimitedSize) + '" name="_isUnlimitedSize" >' + getString(idUnlimitedSize) + '</wz-checkbox>')
       chk.prop('checked', getLastIsUnlimitedSize(false))
@@ -169,6 +219,8 @@ console.warn('Remove this line, when WME-Bootstrap will fix its syntax. now it c
       var divGroup1 = $('<div class="controls-container" />')
       divGroup1.append($('<wz-label html-for>' + getString(idWidth) + '</wz-label>'))
       divGroup1.append(selRiverWidth)
+      divGroup1.append(wrapTaperWidths)
+      divGroup1.append(chkUniformWidth)
 
       var divGroup2 = $('<div class="controls-container" />')
       divGroup2.append(chk)
@@ -251,6 +303,91 @@ console.warn('Remove this line, when WME-Bootstrap will fix its syntax. now it c
       })
     }
 
+    function clampWidthMeters (n, fallbackMeters) {
+      var x = Number(n)
+      var fb = Number(fallbackMeters)
+      if (!Number.isFinite(x) || x <= 0) x = Number.isFinite(fb) && fb > 0 ? fb : 15
+      return Math.min(WIDTH_MAX, Math.max(WIDTH_MIN, x))
+    }
+
+    /** @returns {{ start: number, end: number }|null} */
+    function parseWidthRangeMetersFromName (name) {
+      if (!name || typeof name !== 'string') return null
+      var s = name.trim()
+      var mRange = /^(\d+(?:\.\d+)?)\s*(m|м)\s*[-–—]\s*(\d+(?:\.\d+)?)\s*(m|м)\b/i
+      if (mRange.test(s)) {
+        return {
+          start: clampWidthMeters(RegExp.$1, defaultWidth),
+          end: clampWidthMeters(RegExp.$3, defaultWidth)
+        }
+      }
+      var ftRange = /^(\d+(?:\.\d+)?)\s*ft\s*[-–—]\s*(\d+(?:\.\d+)?)\s*ft\b/i
+      if (ftRange.test(s)) {
+        return {
+          start: clampWidthMeters(parseFloat(RegExp.$1) * 0.3048, defaultWidth),
+          end: clampWidthMeters(parseFloat(RegExp.$2) * 0.3048, defaultWidth)
+        }
+      }
+      return null
+    }
+
+    /** @returns {number|null} */
+    function parseSingleWidthMetersFromName (name) {
+      if (!name || typeof name !== 'string') return null
+      var s = name.trim()
+      if (/^(\d+(?:\.\d+)?)\s*(m|м)\b/i.test(s))
+        return clampWidthMeters(RegExp.$1, defaultWidth)
+      if (/^(\d+(?:\.\d+)?)\s*ft\b/i.test(s))
+        return clampWidthMeters(parseFloat(RegExp.$1) * 0.3048, defaultWidth)
+      return null
+    }
+
+    function getRiverWidthRangeFromStreetAndPanel (street) {
+      var name = street && street.attributes && street.attributes.name
+        ? String(street.attributes.name).trim() : ''
+      var range = parseWidthRangeMetersFromName(name)
+      if (range) return range
+      var one = parseSingleWidthMetersFromName(name)
+      if (one != null) return { start: one, end: one }
+      var wStart = clampWidthMeters(getLastRiverWidth(defaultWidth), defaultWidth)
+      if (getLastRiverWidthUniform(true))
+        return { start: wStart, end: wStart }
+      return {
+        start: wStart,
+        end: clampWidthMeters(getLastRiverWidthEnd(defaultWidth), defaultWidth)
+      }
+    }
+
+    function vertexWidthsMeters (vertices, wStart, wEnd) {
+      var n = vertices.length
+      if (n === 0) return []
+      if (n === 1) return [clampWidthMeters(wStart, defaultWidth)]
+      var cumulative = [0]
+      var total = 0
+      var proj = W.map.getProjectionObject()
+      for (var i = 0; i < n - 1; i++) {
+        var ls = new OpenLayers.Geometry.LineString([vertices[i], vertices[i + 1]])
+        total += ls.getGeodesicLength(proj)
+        cumulative.push(total)
+      }
+      var out = []
+      for (var j = 0; j < n; j++) {
+        var t = total === 0 ? 0 : cumulative[j] / total
+        out.push(wStart + t * (wEnd - wStart))
+      }
+      return out
+    }
+
+    function stripRiverWidthPrefixFromStreetName (name) {
+      if (name == null) return ''
+      var s = String(name)
+      s = s.replace(/^\d+(?:\.\d+)?\s*(?:m|м)\s*[-–—]\s*\d+(?:\.\d+)?\s*(?:m|м)\s*/i, '')
+      s = s.replace(/^\d+(?:\.\d+)?\s*ft\s*[-–—]\s*\d+(?:\.\d+)?\s*ft\s*/i, '')
+      s = s.replace(/^\d+(?:\.\d+)?\s*(?:m|м)\s*/i, '')
+      s = s.replace(/^\d+(?:\.\d+)?\s*ft\s*/i, '')
+      return s.trim()
+    }
+
     // 2014-01-09: Base on selected helper street creates or expand an existing river/railway
     function convertToLandmark (sel, lmtype, isUnlimitedSize) {
       var i
@@ -262,36 +399,44 @@ console.warn('Remove this line, when WME-Bootstrap will fix its syntax. now it c
         prevRightEq
       var street = getStreet(sel)
 
-      var displacement = getDisplacement(street)
+      var widthSpec = getRiverWidthRangeFromStreetAndPanel(street)
+      var wStart = widthSpec.start
+      var wEnd = widthSpec.end
 
       // create place with a minimum area 100m2
       // for simple segments only (A-B)
       if (sel.geometry.components.length === 2) {
-        var segLength = 0
         var minArea = 100
         var pt = []
         pt[0] = sel.geometry.components[0]
         pt[1] = sel.geometry.components[1]
 
         var seg = new OpenLayers.Geometry.LineString(pt)
-        segLength = seg.getGeodesicLength(W.map.getProjectionObject())
+        var segLength = seg.getGeodesicLength(W.map.getProjectionObject())
+        var narrow = Math.min(wStart, wEnd)
 
         // if small area is expected
-        if (minArea / displacement > segLength) {
+        if (minArea / narrow > segLength) {
           if (segLength <= Math.sqrt(minArea)) {
             // create a minimum square
             var line = Math.sqrt(minArea)
             var segScale = line / segLength
-            displacement = line / 1.18
+            var wSq = line / 1.18
+            wStart = wSq
+            wEnd = wSq
             pt[1].resize(segScale, pt[0], 1)
           } else {
-            // adjust displacement (width)
-            displacement = minArea / segLength
+            // scale both ends so the narrow side meets min width along the segment
+            var needW = minArea / segLength
+            var f = needW / narrow
+            wStart *= f
+            wEnd *= f
           }
         }
       }
 
       var streetVertices = sel.geometry.getVertices()
+      var vertexWidths = vertexWidthsMeters(streetVertices, wStart, wEnd)
       var polyPoints = null
       var firstPolyPoint = null
       var secondPolyPoint = null
@@ -384,16 +529,19 @@ console.warn('Remove this line, when WME-Bootstrap will fix its syntax. now it c
         var points = [pa, pb]
         var ls = new OpenLayers.Geometry.LineString(points)
         var len = ls.getGeodesicLength(W.map.getProjectionObject())
-        var scale = (len + displacement / 2) / len
+        var wPa = vertexWidths[i]
+        var wPb = vertexWidths[i + 1]
+        var scalePa = (len + wPa / 2) / len
+        var scalePb = (len + wPb / 2) / len
 
         leftPa = pa.clone()
-        leftPa.resize(scale, pb, 1)
+        leftPa.resize(scalePa, pb, 1)
         rightPa = leftPa.clone()
         leftPa.rotate(90, pa)
         rightPa.rotate(-90, pa)
 
         leftPb = pb.clone()
-        leftPb.resize(scale, pa, 1)
+        leftPb.resize(scalePb, pa, 1)
         rightPb = leftPb.clone()
         leftPb.rotate(-90, pb)
         rightPb.rotate(90, pb)
@@ -484,7 +632,7 @@ console.warn('Remove this line, when WME-Bootstrap will fix its syntax. now it c
 
         // 2014-01-09: Add river's name base on Street Name
         if (street && street.attributes.name) {
-          riverLandmark.attributes.name = street.attributes.name.replace(/^\d+(m|м|ft)\s*/, '') // TODO make localizable
+          riverLandmark.attributes.name = stripRiverWidthPrefixFromStreetName(street.attributes.name)
         }
 
         // 2014-10-08: Add new Landmark to Waze Editor
@@ -847,16 +995,31 @@ console.warn('Remove this line, when WME-Bootstrap will fix its syntax. now it c
       return street
     }
 
-    function getDisplacement (street) {
-      if (!street)
-        return getLastRiverWidth(defaultWidth)
-      if (!street.attributes.name)
-        return getLastRiverWidth(defaultWidth)
-      if (street.attributes.name.match(/^(\d+)(m|м)\b/)) // TODO make localizable
-        return parseInt(RegExp.$1)
-      if (street.attributes.name.match(/^(\d+)ft\b/)) // TODO make localizable
-        return parseInt(RegExp.$1) * 0.3048
-      return getLastRiverWidth(defaultWidth)
+    // 2013-06-09: Save current river width (end of taper; panel)
+    function setLastRiverWidthEnd (riverWidth) {
+      if (typeof Storage !== 'undefined')
+        sessionStorage.riverWidthEnd = Number(riverWidth)
+      else
+        console_log('No web storage support')
+    }
+
+    function getLastRiverWidthEnd (defaultRiverWidth) {
+      if (typeof Storage !== 'undefined' && sessionStorage.riverWidthEnd != null && sessionStorage.riverWidthEnd !== '')
+        return Number(sessionStorage.riverWidthEnd)
+      return getLastRiverWidth(defaultRiverWidth)
+    }
+
+    function setLastRiverWidthUniform (uniform) {
+      if (typeof Storage !== 'undefined')
+        sessionStorage.riverWidthUniform = uniform ? '1' : '0'
+      else
+        console_log('No web storage support')
+    }
+
+    function getLastRiverWidthUniform (defaultUniform) {
+      if (typeof Storage !== 'undefined' && sessionStorage.riverWidthUniform != null && sessionStorage.riverWidthUniform !== '')
+        return sessionStorage.riverWidthUniform === '1' || Number(sessionStorage.riverWidthUniform) === 1
+      return defaultUniform !== false
     }
 
     // 2013-06-09: Save current river Width
@@ -964,47 +1127,56 @@ console.warn('Remove this line, when WME-Bootstrap will fix its syntax. now it c
         case 'es-419':
           langText = ['', 'Ancho (metros)', 'Cree una nueva calle, selecciónela y oprima este botón.', 'Calle a Río', 'Tamaño ilimitado',
             '¡No se encontró una calle sin guardar!', 'Todos los segmentos de la calle adentro del río. No se puede continuar.',
-            'Múltiples segmentos de la calle dentro del río. No se puede continuar', 'Other', 'Forest', 'Delete segment', 'Canal']
+            'Múltiples segmentos de la calle dentro del río. No se puede continuar', 'Other', 'Forest', 'Delete segment', 'Canal', 'Ancho final (m)',
+            'Mismo ancho en todo el tramo']
           break
         case 'fr': // 2014-06-05: French
           langText = ['', 'Largura (mètres)', 'Crie uma nova rua, a selecione e clique neste botão.', 'Rue á rivière', 'Taille illimitée (dangereux)',
             'Pas de nouvelle rue non enregistré trouvée!', 'Tous les segments de la rue dans la rivière. Vous ne pouvez pas continuer.',
-            'Plusieurs segments de rues à l\'intérieur de la rivière. Vous ne pouvez pas continuer.', 'Other', 'Forest', 'Delete segment', 'Canal']
+            'Plusieurs segments de rues à l\'intérieur de la rivière. Vous ne pouvez pas continuer.', 'Other', 'Forest', 'Delete segment', 'Canal', 'Largeur fin (m)',
+            'Même largeur sur toute la longueur']
           break
         case 'ru': // 2014-06-05: Russian
           langText = ['', 'Ширина (в метрах)', 'Создайте новую дорогу (не сохраняйте), выберите ее и нажмите эту кнопку.', 'Река', 'Вся длина',
             'Не выделено ни одной не сохраненной дороги!', 'Все сегменты дороги находятся внутри реки. Преобразование невозможно.',
-            'Слишком много сегментов дороги находится внутри реки. Преобразование невозможно.', 'Контур', 'Лес', 'Удалить сегмент', 'Канал']
+            'Слишком много сегментов дороги находится внутри реки. Преобразование невозможно.', 'Контур', 'Лес', 'Удалить сегмент', 'Канал', 'Ширина в конце (м)',
+            'Одна ширина на всю длину']
           break
         case 'uk': // 2018-05-03: Ukrainian
           langText = ['', 'Ширина (в метрах)', 'Створіть нову дорогу (не зберігайте і не знімайте виділення) та натисніть цю кнопку.', 'Ріка', 'Безлімітна довжина (небезпечно)',
             'Не виділено жодної збереженої дороги!', 'Усі сегменти дороги знаходяться всередині ріки. Перетворення неможливе.',
-            'Занадто багато сегментів дороги знаходяться всередині ріки. Перетворення неможливе.', 'Контур', 'Ліс', 'Видалити сегмент', 'Канал']
+            'Занадто багато сегментів дороги знаходяться всередині ріки. Перетворення неможливе.', 'Контур', 'Ліс', 'Видалити сегмент', 'Канал', 'Ширина в кінці (м)',
+            'Та сама ширина на всю довжину']
           break
         case 'hu': // 2014-07-02: Hungarian
           langText = ['', 'Szélesség (méter)', 'Hozzon létre egy új utcát, válassza ki, majd kattintson erre a gombra.', 'Utcából folyó', 'Korlátlan méretű (nem biztonságos)',
             'Nem található nem mentett és kiválasztott új utca!', 'Az útszakasz a folyón belül található! Nem lehet folytatni.',
-            'Minden útszakasz a folyón belül található! Nem lehet folytatni.', 'Other', 'Forest', 'Delete segment', 'Canal']
+            'Minden útszakasz a folyón belül található! Nem lehet folytatni.', 'Other', 'Forest', 'Delete segment', 'Canal', 'Szélesség vége (m)',
+            'Azonos szélesség a teljes hosszon']
           break
         case 'cs': // 2014-07-03: Czech
           langText = ['', 'Šířka (metrů)', 'Vytvořte osu řeky, vyberte segment a stiskněte toto tlačítko.', 'Silnice na řeku', 'Neomezená šířka (nebezpečné)',
             'Nebyly vybrány žádné neuložené segmenty!', 'Všechny segmenty jsou uvnitř řeky! Nelze pokračovat.',
-            'Uvnitř řeky je více segmentů! Nelze pokračovat.', 'Other', 'Forest', 'Delete segment', 'Canal']
+            'Uvnitř řeky je více segmentů! Nelze pokračovat.', 'Other', 'Forest', 'Delete segment', 'Canal', 'Šířka na konci (m)',
+            'Stejná šířka po celé délce']
           break
         case 'pl': // 2014-11-08: Polish - By Zniwek
           langText = ['', 'Szerokość (w metrach)', 'Stwórz ulicę, wybierz ją i kliknij ten przycisk.', 'Ulica w Rzekę', 'Nieskończony rozmiar (niebezpieczne)',
             'Nie znaleziono nowej i niezapisanej ulicy!', 'Wszystkie segmenty ulicy wewnątrz rzeki. Nie mogę kontynuować.',
-            'Wiele segmentów ulicy wewnątrz rzeki. Nie mogę kontynuować.', 'Other', 'Forest', 'Delete segment', 'Canal']
+            'Wiele segmentów ulicy wewnątrz rzeki. Nie mogę kontynuować.', 'Other', 'Forest', 'Delete segment', 'Canal', 'Szerokość na końcu (m)',
+            'Ta sama szerokość na całej długości']
           break
         case 'pt-br': // 2015-04-05: Portuguese - By esmota
           langText = ['', 'Largura (metros)', 'Criar uma nova rua, selecione e clique neste botão.', 'Rua para Rio', 'Comprimento ilimitado (instável)',
             'Nenhuma nova rua, sem salvar, selecionada!', 'Todos os segmentos de rua estão dentro de um rio. Nada a fazer.',
-            'Múltiplos segmentos de rua dentro de um rio. Impossível continuar.', 'Other', 'Forest', 'Delete segment', 'Canal']
+            'Múltiplos segmentos de rua dentro de um rio. Impossível continuar.', 'Other', 'Forest', 'Delete segment', 'Canal', 'Largura final (m)',
+            'Mesma largura em todo o trecho']
           break
         default: // 2014-06-05: English
           langText = ['', 'Width (in meters)', 'Create a new street, select and click this button.', 'River', 'Unlimited size (unsafe)',
             'No unsaved and selected new street found!', 'All street segments inside river. Cannot continue.',
-            'Multiple street segments inside river. Cannot continue.', 'Other', 'Forest', 'Delete segment', 'Canal']
+            'Multiple street segments inside river. Cannot continue.', 'Other', 'Forest', 'Delete segment', 'Canal', 'Width end (m)',
+            'Same width entire length']
       }
     }
 

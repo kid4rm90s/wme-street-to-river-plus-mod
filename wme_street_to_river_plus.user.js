@@ -388,6 +388,125 @@ console.warn('Remove this line, when WME-Bootstrap will fix its syntax. now it c
       return s.trim()
     }
 
+    function riverRingEdgesShareVertex (i, j, n) {
+      var i2 = (i + 1) % n
+      var j2 = (j + 1) % n
+      return i === j || i === j2 || i2 === j || i2 === j2
+    }
+
+    /** Proper interior intersection (excluding endpoints); map XY. */
+    function segmentProperIntersectionXY (a, b, c, d, eps) {
+      var e = eps == null ? 1e-9 : eps
+      var rx = b.x - a.x, ry = b.y - a.y
+      var sx = d.x - c.x, sy = d.y - c.y
+      var denom = rx * sy - ry * sx
+      if (Math.abs(denom) < e) return null
+      var qpx = c.x - a.x, qpy = c.y - a.y
+      var t = (qpx * sy - qpy * sx) / denom
+      var u = (qpx * ry - qpy * rx) / denom
+      if (t <= e || t >= 1 - e || u <= e || u >= 1 - e) return null
+      return { x: a.x + t * rx, y: a.y + t * ry }
+    }
+
+    /** Fallback: point on first segment (clamped) when segments touch/cross. */
+    function intersectionOnSegmentsClampedXY (a, b, c, d) {
+      var rx = b.x - a.x, ry = b.y - a.y
+      var sx = d.x - c.x, sy = d.y - c.y
+      var denom = rx * sy - ry * sx
+      if (Math.abs(denom) < 1e-14) return null
+      var qpx = c.x - a.x, qpy = c.y - a.y
+      var t = (qpx * sy - qpy * sx) / denom
+      var u = (qpx * ry - qpy * rx) / denom
+      if (t < -1e-6 || t > 1 + 1e-6 || u < -1e-6 || u > 1 + 1e-6) return null
+      var tt = Math.max(0, Math.min(1, t))
+      return { x: a.x + tt * rx, y: a.y + tt * ry }
+    }
+
+    function findRiverRingCrossingEdgePair (pts) {
+      var n = pts.length
+      if (n < 4) return null
+      for (var i = 0; i < n; i++) {
+        var ia = (i + 1) % n
+        for (var j = i + 1; j < n; j++) {
+          if (riverRingEdgesShareVertex(i, j, n)) continue
+          var ja = (j + 1) % n
+          if (isIntersectingLines(pts[i], pts[ia], pts[j], pts[ja]))
+            return { i: i, j: j }
+        }
+      }
+      return null
+    }
+
+    function riverRingSelfIntersects (pts) {
+      return findRiverRingCrossingEdgePair(pts) != null
+    }
+
+    /**
+     * Cut a self-crossing loop: rotate by i, replace chain r[1]..r[jR] with vertex I.
+     * Returns new ring or null if cut would delete the anchor index or is degenerate.
+     */
+    function applyRiverRingSpliceAt (pts, i, j, I) {
+      var n = pts.length
+      var jR = (j - i + n) % n
+      if (jR < 2 || jR >= n - 1) return null
+      var r = []
+      for (var k = 0; k < n; k++) r.push(pts[(i + k) % n])
+      var idx0inR = (n - i) % n
+      if (idx0inR >= 1 && idx0inR <= jR) return null
+      var out = [r[0], new OpenLayers.Geometry.Point(I.x, I.y)]
+      for (k = jR + 1; k < n; k++) out.push(r[k])
+      var startIdx = idx0inR === 0 ? 0 : idx0inR - jR + 1
+      var m = out.length
+      var final = []
+      for (k = 0; k < m; k++) final.push(out[(startIdx + k) % m])
+      return final
+    }
+
+    function tryRiverRingSpliceRepairs (pts, i, j, I) {
+      var a = applyRiverRingSpliceAt(pts, i, j, I)
+      if (a && a.length >= 4 && !riverRingSelfIntersects(a)) {
+        pts.length = 0
+        for (var k = 0; k < a.length; k++) pts.push(a[k])
+        return true
+      }
+      var b = applyRiverRingSpliceAt(pts, j, i, I)
+      if (b && b.length >= 4 && !riverRingSelfIntersects(b)) {
+        pts.length = 0
+        for (k = 0; k < b.length; k++) pts.push(b[k])
+        return true
+      }
+      return false
+    }
+
+    /** Remove bow-tie / fold from offset polygon (in place). */
+    function ensureRiverRingSimple (polyPoints) {
+      if (!polyPoints || polyPoints.length < 4) return
+      var repaired = false
+      var maxIter = 48
+      var iter = 0
+      while (iter++ < maxIter && polyPoints.length > 4 && riverRingSelfIntersects(polyPoints)) {
+        var cr = findRiverRingCrossingEdgePair(polyPoints)
+        if (!cr) break
+        var i = cr.i
+        var j = cr.j
+        var ia = (i + 1) % polyPoints.length
+        var ja = (j + 1) % polyPoints.length
+        var I = segmentProperIntersectionXY(polyPoints[i], polyPoints[ia], polyPoints[j], polyPoints[ja], 1e-10)
+        if (!I) I = intersectionOnSegmentsClampedXY(polyPoints[i], polyPoints[ia], polyPoints[j], polyPoints[ja])
+        if (I && tryRiverRingSpliceRepairs(polyPoints, i, j, I)) {
+          repaired = true
+          continue
+        }
+        var rem = (cr.i + 1) % polyPoints.length
+        polyPoints.splice(rem, 1)
+        repaired = true
+      }
+      if (riverRingSelfIntersects(polyPoints))
+        console_log('[Street to River+] Self-intersecting ring could not be fully repaired (vertices=' + polyPoints.length + ')')
+      else if (repaired)
+        console_log('[Street to River+] Ring self-intersection repaired')
+    }
+
     // 2014-01-09: Base on selected helper street creates or expand an existing river/railway
     function convertToLandmark (sel, lmtype, isUnlimitedSize) {
       var i
@@ -611,6 +730,9 @@ console.warn('Remove this line, when WME-Bootstrap will fix its syntax. now it c
         polyPoints.push(leftPb)
       }
       console_log('River polygon: done')
+
+      if (bAddNew)
+        ensureRiverRingSimple(polyPoints)
 
       // 2014-01-09: Create or expand an existing river?
       if (bAddNew) {

@@ -3,7 +3,7 @@
 // @description     This script create a new river landmark in waze map editor (WME). It transforms the the geometry of a new unsaved street to a polygon.
 // @namespace       https://greasyfork.org/users/160654-waze-ukraine
 // @grant           none
-// @version         2026.05.10.018
+// @version         2026.05.10.021
 // @match           https://beta.waze.com/*editor*
 // @match           https://www.waze.com/*editor*
 // @exclude         https://www.waze.com/*user/*editor/*
@@ -58,6 +58,7 @@ console.warn('Remove this line, when WME-Bootstrap will fix its syntax. now it c
   const idWidthEnd = 12
   const idWidthUniform = 13
   const idAttachCrossing = 14
+  const idEndCapRound = 15
 
   const WIDTH_MIN = 0.5
   const WIDTH_MAX = 2000
@@ -221,6 +222,12 @@ console.warn('Remove this line, when WME-Bootstrap will fix its syntax. now it c
         setLastAttachCrossing(this.checked)
       })
 
+      var chkEndCapRound = $('<wz-checkbox name="_riverEndCapRound">' + getString(idEndCapRound) + '</wz-checkbox>')
+      chkEndCapRound.prop('checked', getLastEndCapRound(true))
+      chkEndCapRound.change(function () {
+        setLastEndCapRound(this.checked)
+      })
+
       var cnt = $('<div class="form-group" />')
       var label = $('<wz-label><a href="https://github.com/waze-ua/wme-street-to-river-plus-mod" target="_blank">Street to River+ (Mod) v' + version + '</a></wz-label>')
       cnt.append(label)
@@ -235,6 +242,7 @@ console.warn('Remove this line, when WME-Bootstrap will fix its syntax. now it c
       divGroup2.append(chk)
       divGroup2.append(chkDel)
       divGroup2.append(chkAttachCrossing)
+      divGroup2.append(chkEndCapRound)
 
       var divGroup3 = $('<div class="controls-container" />')
       divGroup3.append(btn0)
@@ -531,6 +539,100 @@ console.warn('Remove this line, when WME-Bootstrap will fix its syntax. now it c
         console_log('[Street to River+] Self-intersecting ring could not be fully repaired (vertices=' + polyPoints.length + ')')
       else if (repaired)
         console_log('[Street to River+] Ring self-intersection repaired')
+    }
+
+    function segmentUnitXY (fromPt, toPt) {
+      var dx = toPt.x - fromPt.x
+      var dy = toPt.y - fromPt.y
+      var len = Math.sqrt(dx * dx + dy * dy)
+      if (len < 1e-12) return { ux: 1, uy: 0, len: 0 }
+      return { ux: dx / len, uy: dy / len, len: len }
+    }
+
+    /** Edge of the strip whose midpoint lies nearest to capVertex; widthApprox tunes length penalty (map units). */
+    function findRiverCapEdgeNearVertex (polyPoints, capVertex, widthApprox) {
+      var n = polyPoints.length
+      var best = -1
+      var bestScore = 1e300
+      var wa = widthApprox > 0 ? widthApprox : 1
+      for (var i = 0; i < n; i++) {
+        var j = (i + 1) % n
+        var a = polyPoints[i]
+        var b = polyPoints[j]
+        if (!a || !b || typeof a.distanceTo !== 'function') continue
+        var elen = a.distanceTo(b)
+        if (elen < 1e-8) continue
+        var mx = (a.x + b.x) * 0.5
+        var my = (a.y + b.y) * 0.5
+        var dmx = mx - capVertex.x
+        var dmy = my - capVertex.y
+        var dmid = Math.sqrt(dmx * dmx + dmy * dmy)
+        var pen = Math.abs(elen - wa) * 0.2
+        var sc = dmid + pen
+        if (sc < bestScore) {
+          bestScore = sc
+          best = i
+        }
+      }
+      return best
+    }
+
+    /**
+     * Replace straight cap L–R with L–P–Q–R: P,Q at ¼ and ¾ along the cap, shifted **outward** (opposite the
+     * river body / axis) so the tip bulges instead of notching inward. `axisUx,axisUy` is unit vector along the helper into the strip.
+     */
+    function chamferRiverCapAtEdge (polyPoints, edgeStartIdx, axisUx, axisUy) {
+      var n = polyPoints.length
+      if (n < 4 || edgeStartIdx < 0 || edgeStartIdx >= n) return
+      var i = edgeStartIdx
+      var j = (i + 1) % n
+      var L = polyPoints[i]
+      var R = polyPoints[j]
+      if (!L || !R) return
+      var dcx = R.x - L.x
+      var dcy = R.y - L.y
+      var capLen = Math.sqrt(dcx * dcx + dcy * dcy)
+      if (capLen < 1e-10) return
+      dcx /= capLen
+      dcy /= capLen
+      var depth = Math.min(capLen * 0.32, capLen * 0.24)
+      if (depth < 1e-12) return
+      var t1 = 0.25
+      var t2 = 0.75
+      var Px = L.x + dcx * (capLen * t1) - axisUx * depth
+      var Py = L.y + dcy * (capLen * t1) - axisUy * depth
+      var Qx = L.x + dcx * (capLen * t2) - axisUx * depth
+      var Qy = L.y + dcy * (capLen * t2) - axisUy * depth
+      polyPoints.splice(i + 1, 0,
+        new OpenLayers.Geometry.Point(Px, Py),
+        new OpenLayers.Geometry.Point(Qx, Qy))
+    }
+
+    /** Two extra vertices on each end cap (45° style bevel along river axis). */
+    function applyRiverEndCapChamfers45 (polyPoints, streetVertices, firstIndex, vertexWidths, capWidthStart, capWidthEnd) {
+      var nv = streetVertices.length
+      if (nv < 2 || !polyPoints || polyPoints.length < 4) return
+      var v0 = streetVertices[firstIndex]
+      var v1 = streetVertices[firstIndex + 1]
+      var vA = streetVertices[nv - 2]
+      var vB = streetVertices[nv - 1]
+      if (!v0 || !v1 || !vA || !vB) return
+      var uS = segmentUnitXY(v0, v1)
+      if (uS.len < 1e-10) return
+      var uE = segmentUnitXY(vB, vA)
+      if (uE.len < 1e-10) return
+      var w0 = vertexWidths[firstIndex] || 15
+      var w1 = vertexWidths[nv - 1] || w0
+      var wa0 = capWidthStart > 0 ? capWidthStart : w0
+      var wa1 = capWidthEnd > 0 ? capWidthEnd : w1
+
+      var idx0 = findRiverCapEdgeNearVertex(polyPoints, v0, wa0)
+      if (idx0 < 0) return
+      chamferRiverCapAtEdge(polyPoints, idx0, uS.ux, uS.uy)
+
+      var idx1 = findRiverCapEdgeNearVertex(polyPoints, vB, wa1)
+      if (idx1 < 0 || idx1 === idx0) return
+      chamferRiverCapAtEdge(polyPoints, idx1, uE.ux, uE.uy)
     }
 
     /**
@@ -998,6 +1100,9 @@ console.warn('Remove this line, when WME-Bootstrap will fix its syntax. now it c
         segStartForPoly = firstStreetVerticeOutside
       }
 
+      var capWStart = 0
+      var capWEnd = 0
+
       for (i = first; i < streetVertices.length - 1; i++) {
         var pa = streetVertices[i]
         var pb = streetVertices[i + 1]
@@ -1076,6 +1181,10 @@ console.warn('Remove this line, when WME-Bootstrap will fix its syntax. now it c
         prevLeftEq = leftEq
         prevRightEq = rightEq
 
+        if (i === first)
+          capWStart = leftPa.distanceTo(rightPa)
+        capWEnd = leftPb.distanceTo(rightPb)
+
         // 2013-06-03: Is Waze limit reached?
         if ((polyPoints.length > 50) && !isUnlimitedSize) {
           break
@@ -1093,6 +1202,8 @@ console.warn('Remove this line, when WME-Bootstrap will fix its syntax. now it c
       }
       console_log('River polygon: done')
 
+      if (getLastEndCapRound(true) && polyPoints && polyPoints.length >= 4 && capWStart > 1e-6)
+        applyRiverEndCapChamfers45(polyPoints, streetVertices, first, vertexWidths, capWStart, capWEnd)
       if (polyPoints && polyPoints.length >= 4)
         ensureRiverRingSimple(polyPoints)
 
@@ -1416,6 +1527,19 @@ console.warn('Remove this line, when WME-Bootstrap will fix its syntax. now it c
       return !!defaultOn
     }
 
+    function setLastEndCapRound (on) {
+      if (typeof Storage !== 'undefined')
+        sessionStorage.riverEndCapRound = on ? '1' : '0'
+      else
+        console_log('No web storage support')
+    }
+
+    function getLastEndCapRound (defaultOn) {
+      if (typeof Storage !== 'undefined' && sessionStorage.riverEndCapRound != null && sessionStorage.riverEndCapRound !== '')
+        return sessionStorage.riverEndCapRound === '1' || Number(sessionStorage.riverEndCapRound) === 1
+      return !!defaultOn
+    }
+
     // 2013-06-09: Save current river Width
     function setLastRiverWidth (riverWidth) {
       if (typeof (Storage) !== 'undefined') {
@@ -1522,55 +1646,64 @@ console.warn('Remove this line, when WME-Bootstrap will fix its syntax. now it c
           langText = ['', 'Ancho (metros)', 'Cree una nueva calle, selecciónela y oprima este botón.', 'Calle a Río', 'Tamaño ilimitado',
             '¡No se encontró una calle sin guardar!', 'Todos los segmentos de la calle adentro del río. No se puede continuar.',
             'Múltiples segmentos de la calle dentro del río. No se puede continuar', 'Other', 'Forest', 'Delete segment', 'Canal', 'Ancho final (m)',
-            'Mismo ancho en todo el tramo', 'Sustituir POI si el 1.er tramo cruza el borde']
+            'Mismo ancho en todo el tramo', 'Sustituir POI si el 1.er tramo cruza el borde',
+            'Redondear extremos del tramo']
           break
         case 'fr': // 2014-06-05: French
           langText = ['', 'Largeur (mètres)', 'Créez une nouvelle rue, sélectionnez-la et cliquez sur ce bouton.', 'Rue en rivière', 'Taille illimitée (dangereux)',
             'Pas de nouvelle rue non enregistrée trouvée !', 'Tous les segments de la rue sont dans la rivière. Impossible de continuer.',
             'Plusieurs segments de rue dans la rivière. Impossible de continuer.', 'Other', 'Forest', 'Delete segment', 'Canal', 'Largeur fin (m)',
-            'Même largeur sur toute la longueur', 'Remplacer le POI si le 1er segment croise le bord']
+            'Même largeur sur toute la longueur', 'Remplacer le POI si le 1er segment croise le bord',
+            'Arrondir les extrémités du ruban']
           break
         case 'ru': // 2014-06-05: Russian
           langText = ['', 'Ширина (в метрах)', 'Создайте новую дорогу (не сохраняйте), выберите ее и нажмите эту кнопку.', 'Река', 'Вся длина',
             'Не выделено ни одной не сохраненной дороги!', 'Все сегменты дороги находятся внутри реки. Преобразование невозможно.',
             'Слишком много сегментов дороги находится внутри реки. Преобразование невозможно.', 'Контур', 'Лес', 'Удалить сегмент', 'Канал', 'Ширина в конце (м)',
-            'Одна ширина на всю длину', 'Дополнять POI при пересечении 1-го сегмента (сохранять контур)']
+            'Одна ширина на всю длину', 'Дополнять POI при пересечении 1-го сегмента (сохранять контур)',
+            'Закруглять торцы полосы']
           break
         case 'uk': // 2018-05-03: Ukrainian
           langText = ['', 'Ширина (в метрах)', 'Створіть нову дорогу (не зберігайте і не знімайте виділення) та натисніть цю кнопку.', 'Ріка', 'Безлімітна довжина (небезпечно)',
             'Не виділено жодної збереженої дороги!', 'Усі сегменти дороги знаходяться всередині ріки. Перетворення неможливе.',
             'Занадто багато сегментів дороги знаходяться всередині ріки. Перетворення неможливе.', 'Контур', 'Ліс', 'Видалити сегмент', 'Канал', 'Ширина в кінці (м)',
-            'Та сама ширина на всю довжину', 'Доповнювати POI при перетині 1-го сегмента (зберігати контур)']
+            'Та сама ширина на всю довжину', 'Доповнювати POI при перетині 1-го сегмента (зберігати контур)',
+            'Заокруглювати кінці смуги']
           break
         case 'hu': // 2014-07-02: Hungarian
           langText = ['', 'Szélesség (méter)', 'Hozzon létre egy új utcát, válassza ki, majd kattintson erre a gombra.', 'Utcából folyó', 'Korlátlan méretű (nem biztonságos)',
             'Nem található nem mentett és kiválasztott új utca!', 'Az útszakasz a folyón belül található! Nem lehet folytatni.',
             'Minden útszakasz a folyón belül található! Nem lehet folytatni.', 'Other', 'Forest', 'Delete segment', 'Canal', 'Szélesség vége (m)',
-            'Azonos szélesség a teljes hosszon', 'POI cseréje az 1. szakasz metszésénél']
+            'Azonos szélesség a teljes hosszon', 'POI cseréje az 1. szakasz metszésénél',
+            'Végek lekerekítése']
           break
         case 'cs': // 2014-07-03: Czech
           langText = ['', 'Šířka (metrů)', 'Vytvořte osu řeky, vyberte segment a stiskněte toto tlačítko.', 'Silnice na řeku', 'Neomezená šířka (nebezpečné)',
             'Nebyly vybrány žádné neuložené segmenty!', 'Všechny segmenty jsou uvnitř řeky! Nelze pokračovat.',
             'Uvnitř řeky je více segmentů! Nelze pokračovat.', 'Other', 'Forest', 'Delete segment', 'Canal', 'Šířka na konci (m)',
-            'Stejná šířka po celé délce', 'Nahradit POI při průsečíku 1. úseku']
+            'Stejná šířka po celé délce', 'Nahradit POI při průsečíku 1. úseku',
+            'Zaoblit konce pruhu']
           break
         case 'pl': // 2014-11-08: Polish - By Zniwek
           langText = ['', 'Szerokość (w metrach)', 'Stwórz ulicę, wybierz ją i kliknij ten przycisk.', 'Ulica w Rzekę', 'Nieskończony rozmiar (niebezpieczne)',
             'Nie znaleziono nowej i niezapisanej ulicy!', 'Wszystkie segmenty ulicy wewnątrz rzeki. Nie mogę kontynuować.',
             'Wiele segmentów ulicy wewnątrz rzeki. Nie mogę kontynuować.', 'Other', 'Forest', 'Delete segment', 'Canal', 'Szerokość na końcu (m)',
-            'Ta sama szerokość na całej długości', 'Zamień POI przy przecięciu 1. odcinka']
+            'Ta sama szerokość na całej długości', 'Zamień POI przy przecięciu 1. odcinka',
+            'Zaokrąglaj końce pasa']
           break
         case 'pt-br': // 2015-04-05: Portuguese - By esmota
           langText = ['', 'Largura (metros)', 'Criar uma nova rua, selecione e clique neste botão.', 'Rua para Rio', 'Comprimento ilimitado (instável)',
             'Nenhuma nova rua, sem salvar, selecionada!', 'Todos os segmentos de rua estão dentro de um rio. Nada a fazer.',
             'Múltiplos segmentos de rua dentro de um rio. Impossível continuar.', 'Other', 'Forest', 'Delete segment', 'Canal', 'Largura final (m)',
-            'Mesma largura em todo o trecho', 'Substituir POI se o 1.º segmento cruzar a borda']
+            'Mesma largura em todo o trecho', 'Substituir POI se o 1.º segmento cruzar a borda',
+            'Arredondar as pontas da faixa']
           break
         default: // 2014-06-05: English
           langText = ['', 'Width (in meters)', 'Create a new street, select and click this button.', 'River', 'Unlimited size (unsafe)',
             'No unsaved and selected new street found!', 'All street segments inside river. Cannot continue.',
             'Multiple street segments inside river. Cannot continue.', 'Other', 'Forest', 'Delete segment', 'Canal', 'Width end (m)',
-            'Same width entire length', 'Extend POI when first segment crosses it (keeps rest of outline)']
+            'Same width entire length', 'Extend POI when first segment crosses it (keeps rest of outline)',
+            'Round strip ends']
       }
     }
 

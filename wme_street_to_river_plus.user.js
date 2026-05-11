@@ -3,7 +3,7 @@
 // @description     This script create a new river landmark in waze map editor (WME). It transforms the the geometry of a new unsaved street to a polygon.
 // @namespace       https://greasyfork.org/users/160654-waze-ukraine
 // @grant           none
-// @version         2026.05.10.021
+// @version         2026.05.10.025
 // @match           https://beta.waze.com/*editor*
 // @match           https://www.waze.com/*editor*
 // @exclude         https://www.waze.com/*user/*editor/*
@@ -848,6 +848,33 @@ console.warn('Remove this line, when WME-Bootstrap will fix its syntax. now it c
       return null
     }
 
+    /** True if any helper segment cuts the boundary of another same-type venue (not `excludeLm`). Used to avoid fullGeometryReplace swallowing neighbours when Extend POI is off. */
+    function streetCrossesOtherVenueOfType (lmtype, streetVertices, excludeLm) {
+      if (!excludeLm || !streetVertices || streetVertices.length < 2) return false
+      var exId = excludeLm.attributes && excludeLm.attributes.id
+      var repo = W.model.venues
+      for (var t in repo.objects) {
+        var lm = repo.objects[t]
+        if (!lm || lm.attributes.categories[0] !== lmtype) continue
+        if (exId != null && lm.attributes.id === exId) continue
+        var g = venueGeometryOl(lm)
+        if (!g || typeof g.getVertices !== 'function' || typeof g.containsPoint !== 'function') continue
+        var rv = g.getVertices()
+        if (!rv || rv.length < 2) continue
+        for (var si = 0; si < streetVertices.length - 1; si++) {
+          var sa = streetVertices[si]
+          var sb = streetVertices[si + 1]
+          if (g.containsPoint(sa) && g.containsPoint(sb)) continue
+          for (var j = 0; j < rv.length; j++) {
+            var jn = getNextIndex(j, rv.length, 1)
+            if (isIntersectingLines(rv[j], rv[jn], sa, sb))
+              return true
+          }
+        }
+      }
+      return false
+    }
+
     /** Splice donor polygon ring into main (same logic as classic donor merge). */
     function mergeDonorRiverIntoMain (mainLm, donorLm, streetVertices) {
       var mainOl = venueGeometryOl(mainLm).clone()
@@ -1022,9 +1049,11 @@ console.warn('Remove this line, when WME-Bootstrap will fix its syntax. now it c
               //             break;
             }
             if (gVenScan.containsPoint(streetVertices[streetVertices.length - 1])) {
-              //                        bAddNew = false;    // Street is inside an existing river
-              console_log('donorLandmark=' + riverLandmark.attributes.id)
-              donorLandmark = riverLandmark
+              // Donor merge deletes the other POI; only when "Extend POI at crossing" is enabled (idAttachCrossing).
+              if (getLastAttachCrossing(false)) {
+                console_log('donorLandmark=' + riverLandmark.attributes.id)
+                donorLandmark = riverLandmark
+              }
               //             break;
             }
 
@@ -1056,7 +1085,25 @@ console.warn('Remove this line, when WME-Bootstrap will fix its syntax. now it c
         donorLandmark = null
       }
 
-      var fullGeometryReplace = !bAddNew && !donorLandmark && !attachByFirstSegment
+      // One segment: first vertex inside a same-type POI, last outside. With Extend POI off, do not bind to that venue (would only "append" outline); create a new place along the helper instead.
+      if (!getLastAttachCrossing(false) && streetVertices.length === 2 && rrr) {
+        var gPierce = venueGeometryOl(rrr)
+        if (gPierce && typeof gPierce.containsPoint === 'function' &&
+            gPierce.containsPoint(streetVertices[0]) &&
+            !gPierce.containsPoint(streetVertices[streetVertices.length - 1])) {
+          console_log('Street to River+: exit segment from inside POI with Extend off → new POI instead of extending')
+          rrr = null
+          riverLandmark = null
+          bAddNew = true
+          donorLandmark = null
+        }
+      }
+
+      var crossesOtherVenue = !!(rrr && streetCrossesOtherVenueOfType(lmtype, streetVertices, rrr))
+      var allowFullStripReplace = !crossesOtherVenue || getLastAttachCrossing(false)
+      // One helper segment while extending (!bAddNew): full-strip replace would drop the whole existing outline and keep only the ribbon along that segment (looks like the POI vanished).
+      var singleSegmentExtend = !bAddNew && streetVertices.length === 2
+      var fullGeometryReplace = !bAddNew && !donorLandmark && !attachByFirstSegment && allowFullStripReplace && !singleSegmentExtend
 
       // 2013-10-13: Classic "extend" used first-outside-vertex rules; fullGeometryReplace builds the whole helper and swaps geometry once.
       var bIsOneVerticeStreet = false
@@ -1248,7 +1295,7 @@ console.warn('Remove this line, when WME-Bootstrap will fix its syntax. now it c
         }
 
       } else {
-        if (donorLandmark) {
+        if (donorLandmark && getLastAttachCrossing(false)) {
           mergeDonorRiverIntoMain(riverLandmark, donorLandmark, streetVertices)
           return true
         }

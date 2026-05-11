@@ -3,7 +3,7 @@
 // @description     This script create a new river landmark in waze map editor (WME). It transforms the the geometry of a new unsaved street to a polygon.
 // @namespace       https://greasyfork.org/users/160654-waze-ukraine
 // @grant           none
-// @version         2026.05.09.003
+// @version         2026.05.10.018
 // @match           https://beta.waze.com/*editor*
 // @match           https://www.waze.com/*editor*
 // @exclude         https://www.waze.com/*user/*editor/*
@@ -22,6 +22,7 @@
 //    Example: "20m Spree" — constant 20 m width, named "Spree"
 //    Example: "5m-15m Spree" (or 5м–15м) — width from 5 m at the first vertex to 15 m at the last, along segment length
 //    If the name has no width prefix, use the panel: either one width for the whole river (checkbox) or start and end selects.
+//    Optional "Attach at crossing": first segment crosses same-category POI — extend that POI (keeps existing outline). If end lies in the same POI, it is not treated as a separate donor (avoids merge-delete).
 // 4) Select the helper street
 // 5) Click the "Street to river" button
 // 4) Delete the helper street
@@ -32,6 +33,7 @@
 /* jshint esversion: 11 */
 /* global W */
 /* global I18n */
+/* global getWmeSdk */
 /* global OpenLayers */
 /* global $ */
 /* global require */
@@ -55,6 +57,7 @@ console.warn('Remove this line, when WME-Bootstrap will fix its syntax. now it c
   const idStreetToCanal = 11
   const idWidthEnd = 12
   const idWidthUniform = 13
+  const idAttachCrossing = 14
 
   const WIDTH_MIN = 0.5
   const WIDTH_MAX = 2000
@@ -212,6 +215,12 @@ console.warn('Remove this line, when WME-Bootstrap will fix its syntax. now it c
         setLastIsDeleteSegment(this.checked)
       })
 
+      var chkAttachCrossing = $('<wz-checkbox name="_riverAttachCrossing">' + getString(idAttachCrossing) + '</wz-checkbox>')
+      chkAttachCrossing.prop('checked', getLastAttachCrossing(false))
+      chkAttachCrossing.change(function () {
+        setLastAttachCrossing(this.checked)
+      })
+
       var cnt = $('<div class="form-group" />')
       var label = $('<wz-label><a href="https://github.com/waze-ua/wme-street-to-river-plus-mod" target="_blank">Street to River+ (Mod) v' + version + '</a></wz-label>')
       cnt.append(label)
@@ -225,6 +234,7 @@ console.warn('Remove this line, when WME-Bootstrap will fix its syntax. now it c
       var divGroup2 = $('<div class="controls-container" />')
       divGroup2.append(chk)
       divGroup2.append(chkDel)
+      divGroup2.append(chkAttachCrossing)
 
       var divGroup3 = $('<div class="controls-container" />')
       divGroup3.append(btn0)
@@ -257,8 +267,16 @@ console.warn('Remove this line, when WME-Bootstrap will fix its syntax. now it c
           foundSelectedSegment = true
           convertOK = convertToLandmark(sel, typ, isUnlimitedSize)
           if (convertOK && isDeleteSegment) {
-            var wazeActionDeleteSegment = require('Waze/Action/DeleteSegment')
-            W.model.actionManager.add(new wazeActionDeleteSegment(sel))
+            var SsDel = getSegmentSdk()
+            if (SsDel && sel.attributes && sel.attributes.id != null) {
+              try {
+                SsDel.deleteSegment({ segmentId: Number(sel.attributes.id) })
+              } catch (eDel) {
+                console_log('Street to River+: Segments.deleteSegment: ' + eDel)
+              }
+            } else {
+              console_log('Street to River+: helper delete needs SDK.DataModel.Segments.deleteSegment')
+            }
           }
         }
       }
@@ -501,10 +519,317 @@ console.warn('Remove this line, when WME-Bootstrap will fix its syntax. now it c
         polyPoints.splice(rem, 1)
         repaired = true
       }
+      // If still self-intersecting (e.g. hit maxIter), keep removing one vertex per crossing until simple or minimal ring.
+      var guard = 0
+      while (polyPoints.length > 4 && riverRingSelfIntersects(polyPoints) && guard++ < 96) {
+        var cr2 = findRiverRingCrossingEdgePair(polyPoints)
+        if (!cr2) break
+        polyPoints.splice((cr2.i + 1) % polyPoints.length, 1)
+        repaired = true
+      }
       if (riverRingSelfIntersects(polyPoints))
         console_log('[Street to River+] Self-intersecting ring could not be fully repaired (vertices=' + polyPoints.length + ')')
       else if (repaired)
         console_log('[Street to River+] Ring self-intersection repaired')
+    }
+
+    /**
+     * Per-script SDK from WME (see https://www.waze.com/editor/sdk/ — `getWmeSdk`).
+     * Globals `SDK` / `sdk` are often incomplete; DataModel mutations need this instance when present.
+     */
+    var _wmeSdkScriptInstance = null
+    function getWmeSdkScriptInstance () {
+      if (_wmeSdkScriptInstance) return _wmeSdkScriptInstance
+      try {
+        var gw = typeof window !== 'undefined' && typeof window.getWmeSdk === 'function' ? window.getWmeSdk : (typeof getWmeSdk === 'function' ? getWmeSdk : null)
+        if (!gw) return null
+        var sid = (typeof GM_info !== 'undefined' && GM_info.script && GM_info.script.uuid) ? String(GM_info.script.uuid) : '457548'
+        var sname = (typeof GM_info !== 'undefined' && GM_info.script && GM_info.script.name) ? String(GM_info.script.name) : 'WME Street to River PLUS (mod)'
+        var z = gw({ scriptId: sid, scriptName: sname })
+        if (z && z.DataModel) _wmeSdkScriptInstance = z
+      } catch (e) {
+        console_log('Street to River+: getWmeSdk: ' + e)
+      }
+      return _wmeSdkScriptInstance
+    }
+
+    function wmeSdkRootCandidates () {
+      var list = []
+      function add (x) {
+        if (x && list.indexOf(x) < 0) list.push(x)
+      }
+      try {
+        add(getWmeSdkScriptInstance())
+        if (typeof SDK !== 'undefined' && SDK) add(SDK)
+        if (typeof sdk !== 'undefined' && sdk) add(sdk)
+      } catch (e) {}
+      return list
+    }
+
+    function wmeVenueSdkScore (r) {
+      if (!r || !r.DataModel || !r.DataModel.Venues) return 0
+      var V = r.DataModel.Venues
+      var s = 0
+      if (typeof V.addVenue === 'function') s += 200
+      if (typeof V.updateVenue === 'function') s += 80
+      if (typeof V.updateAddress === 'function') s += 40
+      if (typeof V.deleteVenue === 'function') s += 40
+      if (typeof V.getById === 'function') s += 10
+      return s
+    }
+
+    function wmeSegmentSdkScore (r) {
+      if (!r || !r.DataModel || !r.DataModel.Segments) return 0
+      var S = r.DataModel.Segments
+      var s = 0
+      if (typeof S.deleteSegment === 'function') s += 100
+      if (typeof S.getById === 'function') s += 10
+      return s
+    }
+
+    function pickWmeSdkRootByScore (scorer) {
+      var candidates = wmeSdkRootCandidates()
+      var best = null
+      var bestScore = -1
+      for (var ci = 0; ci < candidates.length; ci++) {
+        var sc = scorer(candidates[ci])
+        if (sc > bestScore) {
+          bestScore = sc
+          best = candidates[ci]
+        }
+      }
+      return bestScore > 0 ? best : null
+    }
+
+    function getWmeSdkRoot () {
+      var v = pickWmeSdkRootByScore(wmeVenueSdkScore)
+      if (v) return v
+      return pickWmeSdkRootByScore(wmeSegmentSdkScore)
+    }
+
+    function getVenueSdk () {
+      var r = pickWmeSdkRootByScore(wmeVenueSdkScore)
+      return r && r.DataModel && r.DataModel.Venues ? r.DataModel.Venues : null
+    }
+
+    function sdkGeoJsonToOl (gj) {
+      if (!gj) return null
+      try {
+        if (W.userscripts && typeof W.userscripts.toOLGeometry === 'function')
+          return W.userscripts.toOLGeometry(gj)
+      } catch (e1) {}
+      try {
+        var fmt = new OpenLayers.Format.GeoJSON()
+        var parsed = fmt.read(typeof gj === 'string' ? gj : JSON.stringify(gj))
+        if (parsed && parsed.geometry) return parsed.geometry
+        if (parsed && parsed.CLASS_NAME) return parsed
+      } catch (e2) {}
+      return null
+    }
+
+    /** OpenLayers geometry for a venue model (prefer WME SDK to avoid deprecated direct .geometry access). */
+    function venueGeometryOl (venueFeature) {
+      var Vs = getVenueSdk()
+      if (Vs && venueFeature && venueFeature.attributes && venueFeature.attributes.id != null) {
+        try {
+          var dto = Vs.getById({ venueId: String(venueFeature.attributes.id) })
+          if (dto && dto.geometry) {
+            var g = sdkGeoJsonToOl(dto.geometry)
+            if (g) return g
+          }
+        } catch (e) {
+          console_log('venueGeometryOl: ' + e)
+        }
+      }
+      return venueFeature.geometry
+    }
+
+    function getSegmentSdk () {
+      var r = pickWmeSdkRootByScore(wmeSegmentSdkScore)
+      return r && r.DataModel && r.DataModel.Segments ? r.DataModel.Segments : null
+    }
+
+    /** OpenLayers geometry for a segment model (prefer SDK — avoids deprecated sel.geometry on segments). */
+    function segmentGeometryOl (segmentFeature) {
+      var Ss = getSegmentSdk()
+      if (Ss && segmentFeature && segmentFeature.attributes && segmentFeature.attributes.id != null) {
+        try {
+          var sid = Number(segmentFeature.attributes.id)
+          var sdto = Ss.getById({ segmentId: sid })
+          if (sdto && sdto.geometry) {
+            var g = sdkGeoJsonToOl(sdto.geometry)
+            if (g) return g
+          }
+        } catch (e) {
+          console_log('segmentGeometryOl: ' + e)
+        }
+      }
+      return segmentFeature.geometry
+    }
+
+    /** Commit venue polygon via SDK (replaces deprecated UpdateFeatureGeometry for venues). */
+    function commitVenueGeometryOl (venueFeature, olPolygon, extraFields) {
+      var Vs = getVenueSdk()
+      if (!Vs || !venueFeature || venueFeature.attributes.id == null) {
+        console_log('Street to River+: commitVenueGeometryOl: SDK or venue id missing')
+        return false
+      }
+      try {
+        var args = { venueId: String(venueFeature.attributes.id), geometry: W.userscripts.toGeoJSONGeometry(olPolygon) }
+        if (extraFields && typeof extraFields === 'object') {
+          for (var ek in extraFields) {
+            if (Object.prototype.hasOwnProperty.call(extraFields, ek))
+              args[ek] = extraFields[ek]
+          }
+        }
+        Vs.updateVenue(args)
+        return true
+      } catch (e) {
+        console_log('Street to River+: commitVenueGeometryOl: ' + e)
+        return false
+      }
+    }
+
+    /** Clear street/house on river venue via SDK (replaces deprecated UpdateFeatureAddress / repository arg). */
+    function applyRiverVenueAddressClearSdk (venueFeature) {
+      var Vs = getVenueSdk()
+      if (!Vs || !venueFeature || venueFeature.attributes.id == null) {
+        console_log('Street to River+: applyRiverVenueAddressClearSdk: SDK or venue missing')
+        return false
+      }
+      var vid = String(venueFeature.attributes.id)
+      var patch = { venueId: vid, houseNumber: '' }
+      if (typeof venueFeature.getAddress === 'function' && W && W.model) {
+        try {
+          var addrModel = venueFeature.getAddress(W.model)
+          if (addrModel && addrModel.attributes) {
+            var a = addrModel.attributes
+            if (a.streetID != null && a.streetID !== '')
+              patch.streetId = null
+          }
+        } catch (e0) {
+          console_log('Street to River+: getAddress(W.model): ' + e0)
+        }
+      }
+      try {
+        Vs.updateAddress(patch)
+        return true
+      } catch (e) {
+        console_log('Street to River+: applyRiverVenueAddressClearSdk: ' + e)
+        try {
+          Vs.updateAddress({ venueId: vid, houseNumber: '' })
+          return true
+        } catch (e2) {
+          console_log('Street to River+: applyRiverVenueAddressClearSdk fallback: ' + e2)
+          return false
+        }
+      }
+    }
+
+    /** First segment pa–pb crosses an existing same-category venue boundary (any edge). Skip only when both endpoints lie inside the same ring (segment does not cut the boundary). */
+    function findLandmarkCrossingFirstSegment (lmtype, pa, pb) {
+      var repo = W.model.venues
+      for (var t in repo.objects) {
+        var lm = repo.objects[t]
+        if (!lm || lm.attributes.categories[0] !== lmtype) continue
+        var g = venueGeometryOl(lm)
+        if (!g || typeof g.getVertices !== 'function' || typeof g.containsPoint !== 'function') continue
+        if (g.containsPoint(pa) && g.containsPoint(pb)) continue
+        var rv = g.getVertices()
+        if (!rv || rv.length < 2) continue
+        for (var j = 0; j < rv.length; j++) {
+          var jn = getNextIndex(j, rv.length, 1)
+          if (isIntersectingLines(rv[j], rv[jn], pa, pb))
+            return lm
+        }
+      }
+      return null
+    }
+
+    /** Splice donor polygon ring into main (same logic as classic donor merge). */
+    function mergeDonorRiverIntoMain (mainLm, donorLm, streetVertices) {
+      var mainOl = venueGeometryOl(mainLm).clone()
+      var donorOl = venueGeometryOl(donorLm).clone()
+      var components = mainOl.components[0].components
+      var componentsDonor = donorOl.components[0].components
+
+      var componentsRL = CalcRL(components)
+      var componentsDonorRL = CalcRL(componentsDonor)
+      console_log('mergeDonor: src=' + componentsRL + ', donor=' + componentsDonorRL)
+      var dist = 1000000000
+      var p1 = [0, 0],
+        p2 = [0, 0]
+      for (let i1 = 0; i1 < components.length; i1++) {
+        var d1 = Math.sqrt(Math.pow(Math.abs(components[i1].x - streetVertices[0].x), 2) + Math.pow(Math.abs(components[i1].y - streetVertices[0].y), 2))
+        if (d1 < dist) {
+          dist = d1
+          p1[0] = i1
+          if (componentsRL > 0)
+            p1[1] = i1 === 0 ? components.length - 1 : i1 - 1
+          else
+            p1[1] = i1 == components.length - 1 ? 0 : i1 + 1
+        }
+      }
+      dist = 1000000000
+      for (let i1 = 0; i1 < componentsDonor.length; i1++) {
+        let d1 = Math.sqrt(Math.pow(Math.abs(componentsDonor[i1].x - streetVertices[streetVertices.length - 1].x), 2) + Math.pow(Math.abs(componentsDonor[i1].y - streetVertices[streetVertices.length - 1].y), 2))
+        if (d1 < dist) {
+          dist = d1
+          p2[0] = i1
+          if (componentsDonorRL > 0)
+            p2[1] = i1 === 0 ? componentsDonor.length - 1 : i1 - 1
+          else
+            p2[1] = i1 == componentsDonor.length - 1 ? 0 : i1 + 1
+        }
+      }
+
+      var componentsNew = components.slice()
+      componentsNew.length = 0
+      for (let i1 = 0; i1 <= p1[0]; ++i1)
+        componentsNew.push(components[i1])
+
+      if (componentsRL < 0) {
+        if (componentsDonorRL < 0) {
+          for (let i1 = p2[0]; i1 < componentsDonor.length; ++i1)
+            componentsNew.push(componentsDonor[i1])
+          for (let i1 = 0; i1 < p2[0]; ++i1)
+            componentsNew.push(componentsDonor[i1])
+        } else {
+          for (let i1 = p2[0]; i1 >= 0; --i1)
+            componentsNew.push(componentsDonor[i1])
+          for (let i1 = componentsDonor.length - 1; i1 > p2[0]; --i1)
+            componentsNew.push(componentsDonor[i1])
+        }
+      } else {
+        if (componentsDonorRL < 0) {
+          for (let i1 = p2[0]; i1 >= 0; --i1)
+            componentsNew.push(componentsDonor[i1])
+          for (let i1 = componentsDonor.length - 1; i1 > p2[0]; --i1)
+            componentsNew.push(componentsDonor[i1])
+        } else {
+          for (let i1 = p2[0]; i1 < componentsDonor.length; ++i1)
+            componentsNew.push(componentsDonor[i1])
+          for (let i1 = 0; i1 < p2[0]; ++i1)
+            componentsNew.push(componentsDonor[i1])
+        }
+      }
+
+      for (let i1 = p1[0] + 1; i1 < components.length; ++i1)
+        componentsNew.push(components[i1])
+
+      var mergedRing = uniq(componentsNew)
+      mainOl.components[0].components = mergedRing
+      var VsM = getVenueSdk()
+      if (!VsM) {
+        console_log('Street to River+: donor merge requires SDK.DataModel.Venues (updateVenue + deleteVenue)')
+        return
+      }
+      try {
+        VsM.updateVenue({ venueId: String(mainLm.attributes.id), geometry: W.userscripts.toGeoJSONGeometry(mainOl) })
+        VsM.deleteVenue({ venueId: String(donorLm.attributes.id) })
+      } catch (eMrg) {
+        console_log('Street to River+: SDK merge failed: ' + eMrg)
+      }
     }
 
     // 2014-01-09: Base on selected helper street creates or expand an existing river/railway
@@ -522,13 +847,15 @@ console.warn('Remove this line, when WME-Bootstrap will fix its syntax. now it c
       var wStart = widthSpec.start
       var wEnd = widthSpec.end
 
+      var selLineGeom = segmentGeometryOl(sel)
+
       // create place with a minimum area 100m2
       // for simple segments only (A-B)
-      if (sel.geometry.components.length === 2) {
+      if (selLineGeom && selLineGeom.components && selLineGeom.components.length === 2) {
         var minArea = 100
         var pt = []
-        pt[0] = sel.geometry.components[0]
-        pt[1] = sel.geometry.components[1]
+        pt[0] = selLineGeom.components[0].clone()
+        pt[1] = selLineGeom.components[1].clone()
 
         var seg = new OpenLayers.Geometry.LineString(pt)
         var segLength = seg.getGeodesicLength(W.map.getProjectionObject())
@@ -554,17 +881,18 @@ console.warn('Remove this line, when WME-Bootstrap will fix its syntax. now it c
         }
       }
 
-      var streetVertices = sel.geometry.getVertices()
+      var streetVertices = selLineGeom && typeof selLineGeom.getVertices === 'function'
+        ? selLineGeom.getVertices()
+        : (sel.geometry && typeof sel.geometry.getVertices === 'function' ? sel.geometry.getVertices() : [])
+      if (!streetVertices || streetVertices.length < 2) {
+        console_log('Street to River+: could not read helper segment geometry')
+        alert(getString(idNoUsavedStreet))
+        return false
+      }
       var vertexWidths = vertexWidthsMeters(streetVertices, wStart, wEnd)
       var polyPoints = null
       var firstPolyPoint = null
       var secondPolyPoint = null
-
-      var wazeActionUpdateFeatureGeometry = require('Waze/Action/UpdateFeatureGeometry')
-      var wazefeatureVectorLandmark = require('Waze/Feature/Vector/Landmark')
-      var wazeActionAddLandmark = require('Waze/Action/AddLandmark')
-      var wazeActionDeleteObject = require('Waze/Action/DeleteObject')
-      var wazeActionUpdateFeatureAddress = require('Waze/Action/UpdateFeatureAddress')
 
       console_log('Street vertices: ' + streetVertices.length)
 
@@ -583,15 +911,15 @@ console.warn('Remove this line, when WME-Bootstrap will fix its syntax. now it c
           console_log('streetVertices[0]=' + streetVertices[0])
           console_log('streetVertices[streetVertices.length - 1]=' + streetVertices[streetVertices.length - 1])
 
-          // 2014-06-27: Verify if the landmark object has containsPoint function
-          if ('function' === typeof riverLandmark.geometry.containsPoint) {
-            if (riverLandmark.geometry.containsPoint(streetVertices[0])) {
+          var gVenScan = venueGeometryOl(riverLandmark)
+          if (gVenScan && 'function' === typeof gVenScan.containsPoint) {
+            if (gVenScan.containsPoint(streetVertices[0])) {
               bAddNew = false // Street is inside an existing river
               console_log('rrr=' + riverLandmark.attributes.id)
               rrr = riverLandmark
               //             break;
             }
-            if (riverLandmark.geometry.containsPoint(streetVertices[streetVertices.length - 1])) {
+            if (gVenScan.containsPoint(streetVertices[streetVertices.length - 1])) {
               //                        bAddNew = false;    // Street is inside an existing river
               console_log('donorLandmark=' + riverLandmark.attributes.id)
               donorLandmark = riverLandmark
@@ -603,13 +931,43 @@ console.warn('Remove this line, when WME-Bootstrap will fix its syntax. now it c
       }
       riverLandmark = rrr
 
-      // 2013-10-13: Ignore vertices inside river
+      var attachByFirstSegment = false
+      if (getLastAttachCrossing(false) && streetVertices.length >= 2) {
+        var crossLm = findLandmarkCrossingFirstSegment(lmtype, streetVertices[0], streetVertices[1])
+        if (crossLm) {
+          if (rrr && rrr.attributes.id !== crossLm.attributes.id)
+            console_log('Street to River+: attach at crossing skipped (helper starts inside another POI)')
+          else {
+            if (donorLandmark && donorLandmark.attributes.id === crossLm.attributes.id)
+              donorLandmark = null
+            attachByFirstSegment = true
+            rrr = crossLm
+            riverLandmark = rrr
+            bAddNew = false
+            console_log('Street to River+: first-segment attach → extend venue ' + riverLandmark.attributes.id)
+          }
+        }
+      }
+
+      if (donorLandmark && riverLandmark && donorLandmark.attributes.id === riverLandmark.attributes.id) {
+        console_log('Street to River+: donor same as main venue, clearing donor')
+        donorLandmark = null
+      }
+
+      var fullGeometryReplace = !bAddNew && !donorLandmark && !attachByFirstSegment
+
+      // 2013-10-13: Classic "extend" used first-outside-vertex rules; fullGeometryReplace builds the whole helper and swaps geometry once.
       var bIsOneVerticeStreet = false
       var firstStreetVerticeOutside = 0
-      if (!bAddNew) {
+      if (!bAddNew && fullGeometryReplace) {
+        if (streetVertices.length < 2) {
+          console_log('Street to River+: need at least two vertices to replace venue geometry')
+          return false
+        }
+      } else if (!bAddNew) {
         console_log('Expanding an existing river')
         while (firstStreetVerticeOutside < streetVertices.length) {
-          if (!riverLandmark.geometry.containsPoint(streetVertices[firstStreetVerticeOutside]))
+          if (!venueGeometryOl(riverLandmark).containsPoint(streetVertices[firstStreetVerticeOutside]))
             break
           firstStreetVerticeOutside += 1
         }
@@ -631,10 +989,14 @@ console.warn('Remove this line, when WME-Bootstrap will fix its syntax. now it c
       // 2013-10-13: Add to polyPoints river polygon
       console_log('River polygon: Create')
       var first
-      if (bAddNew)
+      var segStartForPoly
+      if (bAddNew || fullGeometryReplace) {
         first = 0
-      else
-        first = firstStreetVerticeOutside - 1
+        segStartForPoly = 0
+      } else {
+        first = Math.max(0, firstStreetVerticeOutside - 1)
+        segStartForPoly = firstStreetVerticeOutside
+      }
 
       for (i = first; i < streetVertices.length - 1; i++) {
         var pa = streetVertices[i]
@@ -684,12 +1046,12 @@ console.warn('Remove this line, when WME-Bootstrap will fix its syntax. now it c
           var ri = intersectX(rightEq, prevRightEq)
           if (li && ri) {
             // 2013-10-17: Is point outside river?
-            if (i >= firstStreetVerticeOutside) {
+            if (i >= segStartForPoly) {
               polyPoints.unshift(li)
               polyPoints.push(ri)
 
               // 2013-10-17: Is first point outside river? -> Save it for later use
-              if (i == firstStreetVerticeOutside) {
+              if (i == segStartForPoly) {
                 firstPolyPoint = li.clone()
                 secondPolyPoint = ri.clone()
                 polyPoints = [li, ri]
@@ -697,12 +1059,12 @@ console.warn('Remove this line, when WME-Bootstrap will fix its syntax. now it c
             }
           } else {
             // 2013-10-17: Is point outside river?
-            if (i >= firstStreetVerticeOutside) {
+            if (i >= segStartForPoly) {
               polyPoints.unshift(leftPb.clone())
               polyPoints.push(rightPb.clone())
 
               // 2013-10-17: Is first point outside river? -> Save it for later use
-              if (i == firstStreetVerticeOutside) {
+              if (i == segStartForPoly) {
                 firstPolyPoint = leftPb.clone()
                 secondPolyPoint = rightPb.clone()
                 polyPoints = [leftPb, rightPb]
@@ -720,7 +1082,7 @@ console.warn('Remove this line, when WME-Bootstrap will fix its syntax. now it c
         }
       }
 
-      if (bIsOneVerticeStreet) {
+      if (!fullGeometryReplace && bIsOneVerticeStreet) {
         firstPolyPoint = leftPb.clone()
         secondPolyPoint = rightPb.clone()
         polyPoints = [leftPb, rightPb]
@@ -731,184 +1093,94 @@ console.warn('Remove this line, when WME-Bootstrap will fix its syntax. now it c
       }
       console_log('River polygon: done')
 
-      if (bAddNew)
+      if (polyPoints && polyPoints.length >= 4)
         ensureRiverRingSimple(polyPoints)
 
       // 2014-01-09: Create or expand an existing river?
       if (bAddNew) {
-        // 2014-01-09: Add new river
-        // 2014-01-09: Create new river's Polygon
         var polygon = new OpenLayers.Geometry.Polygon(new OpenLayers.Geometry.LinearRing(polyPoints))
-
-        // 2014-10-08: Creates river's Landmark
-
-        //FIX (?????? Start)
-        //                riverLandmark = new wazefeatureVectorLandmark();
-        var ldk = {}
-        ldk.geoJSONGeometry = W.userscripts.toGeoJSONGeometry(polygon)
-        riverLandmark = new wazefeatureVectorLandmark(ldk)
-        //FIX (?????? End)
-
-        riverLandmark.geometry = polygon
-        riverLandmark.attributes.categories.push(lmtype)
-
-        // 2014-01-09: Add river's name base on Street Name
-        if (street && street.attributes.name) {
-          riverLandmark.attributes.name = stripRiverWidthPrefixFromStreetName(street.attributes.name)
+        var VsNew = getVenueSdk()
+        if (!VsNew) {
+          console_log('Street to River+: SDK.DataModel.Venues.addVenue is required to create a new place')
+          return false
         }
-
-        // 2014-10-08: Add new Landmark to Waze Editor
-        var riverLandmark_o = new wazeActionAddLandmark(riverLandmark)
-        W.model.actionManager.add(riverLandmark_o)
+        var idNew
         try {
-          W.selectionManager.setSelectedModels([riverLandmark])
+          idNew = VsNew.addVenue({ category: lmtype, geometry: W.userscripts.toGeoJSONGeometry(polygon) })
+        } catch (eAdd) {
+          console_log('Street to River+: addVenue failed: ' + eAdd)
+          return false
+        }
+        riverLandmark = null
+        for (var tNew in W.model.venues.objects) {
+          var candNew = W.model.venues.objects[tNew]
+          if (candNew && String(candNew.attributes.id) === String(idNew)) {
+            riverLandmark = candNew
+            break
+          }
+        }
+        if (!riverLandmark)
+          console_log('Street to River+: addVenue returned ' + idNew + ' but venue model not found in W.model.venues')
+        if (street && street.attributes.name)
+          VsNew.updateVenue({ venueId: String(idNew), name: stripRiverWidthPrefixFromStreetName(street.attributes.name) })
+        try {
+          if (riverLandmark)
+            W.selectionManager.setSelectedModels([riverLandmark])
         } catch (err) {
-          // Ignore error:
-          // Uncaught TypeError: Cannot read properties of undefined (reading 'children')
-          // at Object.WMETB_FPnewSelectionAvailable (FancyPermalink.min.js:216:184)
-          // at v (third_party-45fe9aba9d649e1fe91a.js.gz:2:1169484)
           console_log(err)
         }
 
-        if (lmtype !== 'OTHER') {
+        if (lmtype !== 'OTHER' && riverLandmark) {
           console_log('bAddNew')
-          let address = riverLandmark.getAddress().attributes
-          console_log(address)
-          let newAddressAtts = {
-            streetName: null,
-            emptyStreet: true,
-            cityName: null,
-            emptyCity: true,
-            stateID: address.state.attributes.id,
-            countryID: address.country.attributes.id
-          }
-          W.model.actionManager.add(new wazeActionUpdateFeatureAddress(riverLandmark, newAddressAtts, {
-            streetIDField: 'streetID'
-          }))
+          if (!applyRiverVenueAddressClearSdk(riverLandmark))
+            console_log('Street to River+: venue address clear (SDK) failed after add')
         }
 
       } else {
-        // 2014-01-09: Expand an existing river
-        var originalGeometry = riverLandmark.geometry.clone()
-
-        if (donorLandmark) // если есть донор
-        {
-          let undoGeometry = riverLandmark.geometry.clone()
-          var undoGeometryDonor = donorLandmark.geometry.clone()
-          var components = riverLandmark.geometry.components[0].components
-          var componentsDonor = donorLandmark.geometry.components[0].components
-
-          //window.donorLandmark=donorLandmark;
-          //window.riverLandmark=riverLandmark;
-
-          // куда закручен массив?
-          var componentsRL = CalcRL(components)
-          var componentsDonorRL = CalcRL(componentsDonor)
-          console_log('src=' + componentsRL + ', donor=' + componentsDonorRL)
-          // найти индекс ближайшей точки к началу сегмента
-          var dist = 1000000000
-          var p1 = [0, 0],
-            p2 = [0, 0] // индексы ближайших точек
-          for (let i1 = 0; i1 < components.length; i1++) {
-            var d1 = Math.sqrt(Math.pow(Math.abs(components[i1].x - streetVertices[0].x), 2) + Math.pow(Math.abs(components[i1].y - streetVertices[0].y), 2))
-            if (d1 < dist) {
-              dist = d1
-              p1[0] = i1
-              if (componentsRL > 0)
-                p1[1] = i1 === 0 ? components.length - 1 : i1 - 1
-              else
-                p1[1] = i1 == components.length - 1 ? 0 : i1 + 1
-            }
-          }
-
-          console_log('p1=' + p1 + ', dist=' + dist)
-          // ищем индекс во втором ПОИ, откуда начинать вставку.
-          dist = 1000000000
-          for (let i1 = 0; i1 < componentsDonor.length; i1++) {
-            let d1 = Math.sqrt(Math.pow(Math.abs(componentsDonor[i1].x - streetVertices[streetVertices.length - 1].x), 2) + Math.pow(Math.abs(componentsDonor[i1].y - streetVertices[streetVertices.length - 1].y), 2))
-            if (d1 < dist) {
-              dist = d1
-              p2[0] = i1
-              if (componentsDonorRL > 0)
-                p2[1] = i1 === 0 ? componentsDonor.length - 1 : i1 - 1
-              else
-                p2[1] = i1 == componentsDonor.length - 1 ? 0 : i1 + 1
-            }
-          }
-          console_log('p2=' + p2 + ', dist=' + dist)
-
-          var componentsNew = components.slice()
-          componentsNew.length = 0
-
-          // добавляем источник
-          for (let i1 = 0; i1 <= p1[0]; ++i1)
-            componentsNew.push(components[i1])
-
-          // добавляем донора
-          if (componentsRL < 0) {
-            if (componentsDonorRL < 0) {
-              // добавляем донора по кругу
-              for (let i1 = p2[0]; i1 < componentsDonor.length; ++i1)
-                componentsNew.push(componentsDonor[i1])
-
-              // ...остаток донора
-              for (let i1 = 0; i1 < p2[0]; ++i1)
-                componentsNew.push(componentsDonor[i1])
-            } else {
-              // добавляем донора по кругу
-              for (let i1 = p2[0]; i1 >= 0; --i1)
-                componentsNew.push(componentsDonor[i1])
-
-              // ...остаток донора
-              for (let i1 = componentsDonor.length - 1; i1 > p2[0]; --i1)
-                componentsNew.push(componentsDonor[i1])
-            }
-          } else {
-            if (componentsDonorRL < 0) {
-              // добавляем донора по кругу
-              for (let i1 = p2[0]; i1 >= 0; --i1)
-                componentsNew.push(componentsDonor[i1])
-
-              // ...остаток донора
-              for (let i1 = componentsDonor.length - 1; i1 > p2[0]; --i1)
-                componentsNew.push(componentsDonor[i1])
-            } else {
-              // добавляем донора по кругу
-              for (let i1 = p2[0]; i1 < componentsDonor.length; ++i1)
-                componentsNew.push(componentsDonor[i1])
-
-              // ...остаток донора
-              for (let i1 = 0; i1 < p2[0]; ++i1)
-                componentsNew.push(componentsDonor[i1])
-            }
-          }
-
-          // добавляем источник
-          for (let i1 = p1[0] + 1; i1 < components.length; ++i1)
-            componentsNew.push(components[i1])
-
-          //window.componentsNew=componentsNew
-          // обновляемся
-          riverLandmark.geometry.components[0].components = uniq(componentsNew)
-
-          W.model.actionManager.add(new wazeActionUpdateFeatureGeometry(riverLandmark, W.model.venues, W.userscripts.toGeoJSONGeometry(undoGeometry), W.userscripts.toGeoJSONGeometry(riverLandmark.geometry)))
-          W.model.actionManager.add(new wazeActionDeleteObject(donorLandmark, W.model.venues, W.userscripts.toGeoJSONGeometry(undoGeometryDonor), W.userscripts.toGeoJSONGeometry(donorLandmark.geometry)))
-
+        if (donorLandmark) {
+          mergeDonorRiverIntoMain(riverLandmark, donorLandmark, streetVertices)
           return true
         }
-        var riverVertices = riverLandmark.geometry.getVertices()
+        if (fullGeometryReplace) {
+          console_log('Street to River+: replace venue geometry in one step, id=' + riverLandmark.attributes.id)
+          var replacePolygon = new OpenLayers.Geometry.Polygon(new OpenLayers.Geometry.LinearRing(polyPoints))
+          var nameExtra = street && street.attributes.name
+            ? { name: stripRiverWidthPrefixFromStreetName(street.attributes.name) }
+            : null
+          if (!commitVenueGeometryOl(riverLandmark, replacePolygon, nameExtra))
+            console_log('Street to River+: full geometry replace failed (needs SDK.DataModel.Venues.updateVenue)')
+
+          try {
+            W.selectionManager.setSelectedModels([riverLandmark])
+          } catch (err) {
+            console_log(err)
+          }
+
+          if (lmtype !== 'OTHER' && riverLandmark) {
+            if (!applyRiverVenueAddressClearSdk(riverLandmark))
+              console_log('Street to River+: venue address clear (SDK) failed after replace')
+          }
+          return true
+        }
+
+        var gWorking = venueGeometryOl(riverLandmark)
+        if (!gWorking || typeof gWorking.clone !== 'function') {
+          console_log('Street to River+: extend path: no venue geometry')
+          return false
+        }
+        var workingPolygon = gWorking.clone()
+        var originalGeometry = workingPolygon.clone()
+        var riverVertices = workingPolygon.getVertices()
         console_log('Total river vertices:' + riverVertices.length)
 
-        // 2013-06-01: Adjust first street vertice in case of a 2 vertice river
         if (firstStreetVerticeOutside === 0)
           firstStreetVerticeOutside = 1
-
-        // 2013-06-01: Find on selected river, the nearest point from the beginning of road
 
         var distance = 0
         var minDistance = 100000
         var indexNearestPolyPoint = 0
         for (i = 0; i < polyPoints.length; i++) {
+          if (!polyPoints[i] || typeof polyPoints[i].distanceTo !== 'function') continue
           distance = polyPoints[i].distanceTo(streetVertices[firstStreetVerticeOutside])
           if (distance < minDistance) {
             minDistance = distance
@@ -924,6 +1196,7 @@ console.warn('Remove this line, when WME-Bootstrap will fix its syntax. now it c
         for (i = 0; i < riverVertices.length; i++) {
           nextIndex = getNextIndex(i, riverVertices.length, +1)
           if (isIntersectingLines(riverVertices[i], riverVertices[nextIndex], streetVertices[0], streetVertices[1])) {
+            if (!polyPoints[indexNearestPolyPoint] || typeof polyPoints[indexNearestPolyPoint].distanceTo !== 'function') break
             distance = polyPoints[indexNearestPolyPoint].distanceTo(riverVertices[i])
             if (distance < minDistance) {
               minDistance = distance
@@ -934,17 +1207,21 @@ console.warn('Remove this line, when WME-Bootstrap will fix its syntax. now it c
         console_log('indexNearestRiverVertice: ' + indexNearestRiverVertice)
         var nextRiverVertice = getNextIndex(indexNearestRiverVertice, riverVertices.length, 1)
 
-        // 2013-06-01: Is river's Polygon clockwise or counter-clockwise?
-
         console_log('nextRiverVertice: ' + nextRiverVertice)
 
         console_log('firstPolyPoint:' + firstPolyPoint)
         console_log('secondPolyPoint:' + secondPolyPoint)
 
+        if (!firstPolyPoint || !secondPolyPoint || firstPolyPoint.x == null || secondPolyPoint.x == null) {
+          var iOut = Math.max(0, Math.min(firstStreetVerticeOutside, streetVertices.length - 1))
+          var iOut1 = Math.max(0, Math.min(firstStreetVerticeOutside + 1, streetVertices.length - 1))
+          firstPolyPoint = streetVertices[iOut]
+          secondPolyPoint = streetVertices[iOut1]
+        }
+
         var inc = 1
         var incIndex = 0
         if (isIntersectingLines(riverVertices[indexNearestRiverVertice], firstPolyPoint, riverVertices[nextRiverVertice], secondPolyPoint)) {
-          //inc = -1;
           console_log('Lines intersect: clockwise polygon')
           inc = +1
           incIndex = 1
@@ -953,27 +1230,22 @@ console.warn('Remove this line, when WME-Bootstrap will fix its syntax. now it c
           console_log('Lines doesn\'t intersect: counter-clockwise polygon')
         }
 
-        // 2013-06-03: Update river's polygon (add new vertices)
-        //var indexLastPolyPoint = getNextIndex(index, polyPoints.length, -inc);
         var indexNextVertice = 1
-        var index = polyPoints.length / 2 - 1
-
+        var index = Math.floor(polyPoints.length / 2) - 1
         if (bIsOneVerticeStreet)
           index += 1
+        if (index < 0) index = 0
+        if (polyPoints.length > 0 && index >= polyPoints.length) index = polyPoints.length - 1
 
         for (i = 0; i < polyPoints.length; i++) {
-          if (!originalGeometry.containsPoint(polyPoints[index])) {
+          var pv = polyPoints[index]
+          if (!pv || typeof pv.x !== 'number' || typeof pv.y !== 'number') {
+            index = getNextIndex(index, polyPoints.length, inc)
+            continue
+          }
+          if (!originalGeometry.containsPoint(pv)) {
 
-            // 2014-01-09: Save's old Landmark
-            let undoGeometry = riverLandmark.geometry.clone()
-
-            // 2014-01-09: Add a new point to existing river landmark
-            riverLandmark.geometry.components[0].addComponent(polyPoints[index], indexNearestRiverVertice + indexNextVertice)
-
-            // 2014-01-09: Update river landmark on Waze editor
-            // 2014-09-30: Gets UptdateFeatureGeometry
-            W.model.actionManager.add(new wazeActionUpdateFeatureGeometry(riverLandmark, W.model.venues, W.userscripts.toGeoJSONGeometry(undoGeometry), W.userscripts.toGeoJSONGeometry(riverLandmark.geometry)))
-            //delete undoGeometry;
+            workingPolygon.components[0].addComponent(pv, indexNearestRiverVertice + indexNextVertice)
 
             console_log('Added: ' + index)
             indexNextVertice += incIndex
@@ -981,25 +1253,12 @@ console.warn('Remove this line, when WME-Bootstrap will fix its syntax. now it c
           index = getNextIndex(index, polyPoints.length, inc)
         }
 
-        // 2013-06-03: Notify Waze that current river's geometry change.
-        //Waze.model.actionManager.add(new Waze.Action.UpdateFeatureGeometry(riverLandmark,Waze.model.landmarks,originalGeometry,riverLandmark.geometry));
-        //delete originalGeometry;
+        if (!commitVenueGeometryOl(riverLandmark, workingPolygon, null))
+          console_log('Street to River+: extend venue geometry failed (needs SDK.DataModel.Venues.updateVenue)')
 
-        if (lmtype !== 'OTHER') {
-          console_log('!bAddNew')
-          let address = riverLandmark.getAddress().attributes
-          console_log(address)
-          let newAddressAtts = {
-            streetName: null,
-            emptyStreet: true,
-            cityName: null,
-            emptyCity: true,
-            stateID: address.state.attributes.id,
-            countryID: address.country.attributes.id
-          }
-          W.model.actionManager.add(new wazeActionUpdateFeatureAddress(riverLandmark, newAddressAtts, {
-            streetIDField: 'streetID'
-          }))
+        if (lmtype !== 'OTHER' && riverLandmark) {
+          if (!applyRiverVenueAddressClearSdk(riverLandmark))
+            console_log('Street to River+: venue address clear (SDK) failed after extend')
         }
 
       }
@@ -1104,7 +1363,7 @@ console.warn('Remove this line, when WME-Bootstrap will fix its syntax. now it c
         return new OpenLayers.Geometry.Point(ix, iy)
       } else if ('number' == typeof eqa.x) {
         return new OpenLayers.Geometry.Point(eqa.x, eqb.slope * eqa.x + eqb.offset)
-      } else if ('number' == typeof eqb.y) {
+      } else if ('number' == typeof eqb.x) {
         return new OpenLayers.Geometry.Point(eqb.x, eqa.slope * eqb.x + eqa.offset)
       }
       return null
@@ -1142,6 +1401,19 @@ console.warn('Remove this line, when WME-Bootstrap will fix its syntax. now it c
       if (typeof Storage !== 'undefined' && sessionStorage.riverWidthUniform != null && sessionStorage.riverWidthUniform !== '')
         return sessionStorage.riverWidthUniform === '1' || Number(sessionStorage.riverWidthUniform) === 1
       return defaultUniform !== false
+    }
+
+    function setLastAttachCrossing (on) {
+      if (typeof Storage !== 'undefined')
+        sessionStorage.riverAttachCrossing = on ? '1' : '0'
+      else
+        console_log('No web storage support')
+    }
+
+    function getLastAttachCrossing (defaultOn) {
+      if (typeof Storage !== 'undefined' && sessionStorage.riverAttachCrossing != null && sessionStorage.riverAttachCrossing !== '')
+        return sessionStorage.riverAttachCrossing === '1' || Number(sessionStorage.riverAttachCrossing) === 1
+      return !!defaultOn
     }
 
     // 2013-06-09: Save current river Width
@@ -1250,55 +1522,55 @@ console.warn('Remove this line, when WME-Bootstrap will fix its syntax. now it c
           langText = ['', 'Ancho (metros)', 'Cree una nueva calle, selecciónela y oprima este botón.', 'Calle a Río', 'Tamaño ilimitado',
             '¡No se encontró una calle sin guardar!', 'Todos los segmentos de la calle adentro del río. No se puede continuar.',
             'Múltiples segmentos de la calle dentro del río. No se puede continuar', 'Other', 'Forest', 'Delete segment', 'Canal', 'Ancho final (m)',
-            'Mismo ancho en todo el tramo']
+            'Mismo ancho en todo el tramo', 'Sustituir POI si el 1.er tramo cruza el borde']
           break
         case 'fr': // 2014-06-05: French
-          langText = ['', 'Largura (mètres)', 'Crie uma nova rua, a selecione e clique neste botão.', 'Rue á rivière', 'Taille illimitée (dangereux)',
-            'Pas de nouvelle rue non enregistré trouvée!', 'Tous les segments de la rue dans la rivière. Vous ne pouvez pas continuer.',
-            'Plusieurs segments de rues à l\'intérieur de la rivière. Vous ne pouvez pas continuer.', 'Other', 'Forest', 'Delete segment', 'Canal', 'Largeur fin (m)',
-            'Même largeur sur toute la longueur']
+          langText = ['', 'Largeur (mètres)', 'Créez une nouvelle rue, sélectionnez-la et cliquez sur ce bouton.', 'Rue en rivière', 'Taille illimitée (dangereux)',
+            'Pas de nouvelle rue non enregistrée trouvée !', 'Tous les segments de la rue sont dans la rivière. Impossible de continuer.',
+            'Plusieurs segments de rue dans la rivière. Impossible de continuer.', 'Other', 'Forest', 'Delete segment', 'Canal', 'Largeur fin (m)',
+            'Même largeur sur toute la longueur', 'Remplacer le POI si le 1er segment croise le bord']
           break
         case 'ru': // 2014-06-05: Russian
           langText = ['', 'Ширина (в метрах)', 'Создайте новую дорогу (не сохраняйте), выберите ее и нажмите эту кнопку.', 'Река', 'Вся длина',
             'Не выделено ни одной не сохраненной дороги!', 'Все сегменты дороги находятся внутри реки. Преобразование невозможно.',
             'Слишком много сегментов дороги находится внутри реки. Преобразование невозможно.', 'Контур', 'Лес', 'Удалить сегмент', 'Канал', 'Ширина в конце (м)',
-            'Одна ширина на всю длину']
+            'Одна ширина на всю длину', 'Дополнять POI при пересечении 1-го сегмента (сохранять контур)']
           break
         case 'uk': // 2018-05-03: Ukrainian
           langText = ['', 'Ширина (в метрах)', 'Створіть нову дорогу (не зберігайте і не знімайте виділення) та натисніть цю кнопку.', 'Ріка', 'Безлімітна довжина (небезпечно)',
             'Не виділено жодної збереженої дороги!', 'Усі сегменти дороги знаходяться всередині ріки. Перетворення неможливе.',
             'Занадто багато сегментів дороги знаходяться всередині ріки. Перетворення неможливе.', 'Контур', 'Ліс', 'Видалити сегмент', 'Канал', 'Ширина в кінці (м)',
-            'Та сама ширина на всю довжину']
+            'Та сама ширина на всю довжину', 'Доповнювати POI при перетині 1-го сегмента (зберігати контур)']
           break
         case 'hu': // 2014-07-02: Hungarian
           langText = ['', 'Szélesség (méter)', 'Hozzon létre egy új utcát, válassza ki, majd kattintson erre a gombra.', 'Utcából folyó', 'Korlátlan méretű (nem biztonságos)',
             'Nem található nem mentett és kiválasztott új utca!', 'Az útszakasz a folyón belül található! Nem lehet folytatni.',
             'Minden útszakasz a folyón belül található! Nem lehet folytatni.', 'Other', 'Forest', 'Delete segment', 'Canal', 'Szélesség vége (m)',
-            'Azonos szélesség a teljes hosszon']
+            'Azonos szélesség a teljes hosszon', 'POI cseréje az 1. szakasz metszésénél']
           break
         case 'cs': // 2014-07-03: Czech
           langText = ['', 'Šířka (metrů)', 'Vytvořte osu řeky, vyberte segment a stiskněte toto tlačítko.', 'Silnice na řeku', 'Neomezená šířka (nebezpečné)',
             'Nebyly vybrány žádné neuložené segmenty!', 'Všechny segmenty jsou uvnitř řeky! Nelze pokračovat.',
             'Uvnitř řeky je více segmentů! Nelze pokračovat.', 'Other', 'Forest', 'Delete segment', 'Canal', 'Šířka na konci (m)',
-            'Stejná šířka po celé délce']
+            'Stejná šířka po celé délce', 'Nahradit POI při průsečíku 1. úseku']
           break
         case 'pl': // 2014-11-08: Polish - By Zniwek
           langText = ['', 'Szerokość (w metrach)', 'Stwórz ulicę, wybierz ją i kliknij ten przycisk.', 'Ulica w Rzekę', 'Nieskończony rozmiar (niebezpieczne)',
             'Nie znaleziono nowej i niezapisanej ulicy!', 'Wszystkie segmenty ulicy wewnątrz rzeki. Nie mogę kontynuować.',
             'Wiele segmentów ulicy wewnątrz rzeki. Nie mogę kontynuować.', 'Other', 'Forest', 'Delete segment', 'Canal', 'Szerokość na końcu (m)',
-            'Ta sama szerokość na całej długości']
+            'Ta sama szerokość na całej długości', 'Zamień POI przy przecięciu 1. odcinka']
           break
         case 'pt-br': // 2015-04-05: Portuguese - By esmota
           langText = ['', 'Largura (metros)', 'Criar uma nova rua, selecione e clique neste botão.', 'Rua para Rio', 'Comprimento ilimitado (instável)',
             'Nenhuma nova rua, sem salvar, selecionada!', 'Todos os segmentos de rua estão dentro de um rio. Nada a fazer.',
             'Múltiplos segmentos de rua dentro de um rio. Impossível continuar.', 'Other', 'Forest', 'Delete segment', 'Canal', 'Largura final (m)',
-            'Mesma largura em todo o trecho']
+            'Mesma largura em todo o trecho', 'Substituir POI se o 1.º segmento cruzar a borda']
           break
         default: // 2014-06-05: English
           langText = ['', 'Width (in meters)', 'Create a new street, select and click this button.', 'River', 'Unlimited size (unsafe)',
             'No unsaved and selected new street found!', 'All street segments inside river. Cannot continue.',
             'Multiple street segments inside river. Cannot continue.', 'Other', 'Forest', 'Delete segment', 'Canal', 'Width end (m)',
-            'Same width entire length']
+            'Same width entire length', 'Extend POI when first segment crosses it (keeps rest of outline)']
       }
     }
 

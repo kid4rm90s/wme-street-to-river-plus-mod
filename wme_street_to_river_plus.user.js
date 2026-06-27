@@ -1,9 +1,9 @@
 // ==UserScript==
 // @name            WME Street to River PLUS (mod)
-// @description     This script create a new river landmark in waze map editor (WME). It transforms the the geometry of a new unsaved street to a polygon.
+// @description     Converts an unsaved WME street segment into a river/forest/canal/other area polygon landmark.
 // @namespace       https://greasyfork.org/users/160654-waze-ukraine
 // @grant           none
-// @version         2026.05.10.025
+// @version         2026.06.27.001
 // @match           https://beta.waze.com/*editor*
 // @match           https://www.waze.com/*editor*
 // @exclude         https://www.waze.com/*user/*editor/*
@@ -1537,61 +1537,61 @@ console.warn('Remove this line, when WME-Bootstrap will fix its syntax. now it c
     // 2013-06-09: Save current river width (end of taper; panel)
     function setLastRiverWidthEnd (riverWidth) {
       if (typeof Storage !== 'undefined')
-        sessionStorage.riverWidthEnd = Number(riverWidth)
+        localStorage.riverWidthEnd = Number(riverWidth)
       else
         console_log('No web storage support')
     }
 
     function getLastRiverWidthEnd (defaultRiverWidth) {
-      if (typeof Storage !== 'undefined' && sessionStorage.riverWidthEnd != null && sessionStorage.riverWidthEnd !== '')
-        return Number(sessionStorage.riverWidthEnd)
+      if (typeof Storage !== 'undefined' && localStorage.riverWidthEnd != null && localStorage.riverWidthEnd !== '')
+        return Number(localStorage.riverWidthEnd)
       return getLastRiverWidth(defaultRiverWidth)
     }
 
     function setLastRiverWidthUniform (uniform) {
       if (typeof Storage !== 'undefined')
-        sessionStorage.riverWidthUniform = uniform ? '1' : '0'
+        localStorage.riverWidthUniform = uniform ? '1' : '0'
       else
         console_log('No web storage support')
     }
 
     function getLastRiverWidthUniform (defaultUniform) {
-      if (typeof Storage !== 'undefined' && sessionStorage.riverWidthUniform != null && sessionStorage.riverWidthUniform !== '')
-        return sessionStorage.riverWidthUniform === '1' || Number(sessionStorage.riverWidthUniform) === 1
+      if (typeof Storage !== 'undefined' && localStorage.riverWidthUniform != null && localStorage.riverWidthUniform !== '')
+        return localStorage.riverWidthUniform === '1' || Number(localStorage.riverWidthUniform) === 1
       return defaultUniform !== false
     }
 
     function setLastAttachCrossing (on) {
       if (typeof Storage !== 'undefined')
-        sessionStorage.riverAttachCrossing = on ? '1' : '0'
+        localStorage.riverAttachCrossing = on ? '1' : '0'
       else
         console_log('No web storage support')
     }
 
     function getLastAttachCrossing (defaultOn) {
-      if (typeof Storage !== 'undefined' && sessionStorage.riverAttachCrossing != null && sessionStorage.riverAttachCrossing !== '')
-        return sessionStorage.riverAttachCrossing === '1' || Number(sessionStorage.riverAttachCrossing) === 1
+      if (typeof Storage !== 'undefined' && localStorage.riverAttachCrossing != null && localStorage.riverAttachCrossing !== '')
+        return localStorage.riverAttachCrossing === '1' || Number(localStorage.riverAttachCrossing) === 1
       return !!defaultOn
     }
 
     function setLastEndCapRound (on) {
       if (typeof Storage !== 'undefined')
-        sessionStorage.riverEndCapRound = on ? '1' : '0'
+        localStorage.riverEndCapRound = on ? '1' : '0'
       else
         console_log('No web storage support')
     }
 
     function getLastEndCapRound (defaultOn) {
-      if (typeof Storage !== 'undefined' && sessionStorage.riverEndCapRound != null && sessionStorage.riverEndCapRound !== '')
-        return sessionStorage.riverEndCapRound === '1' || Number(sessionStorage.riverEndCapRound) === 1
+      if (typeof Storage !== 'undefined' && localStorage.riverEndCapRound != null && localStorage.riverEndCapRound !== '')
+        return localStorage.riverEndCapRound === '1' || Number(localStorage.riverEndCapRound) === 1
       return !!defaultOn
     }
 
     // 2013-06-09: Save current river Width
     function setLastRiverWidth (riverWidth) {
       if (typeof (Storage) !== 'undefined') {
-        // 2013-06-09: Yes! localStorage and sessionStorage support!
-        sessionStorage.riverWidth = Number(riverWidth)
+        // 2013-06-09: Yes! localStorage and localStorage support!
+        localStorage.riverWidth = Number(riverWidth)
       } else {
         // Sorry! No web storage support..
         console_log('No web storage support')
@@ -1601,9 +1601,9 @@ console.warn('Remove this line, when WME-Bootstrap will fix its syntax. now it c
     // 2013-06-09: Returns last saved river width
     function getLastRiverWidth (defaultRiverWidth) {
       if (typeof (Storage) !== 'undefined') {
-        // 2013-06-09: Yes! localStorage and sessionStorage support!
-        if (sessionStorage.riverWidth)
-          return Number(sessionStorage.riverWidth)
+        // 2013-06-09: Yes! localStorage and localStorage support!
+        if (localStorage.riverWidth)
+          return Number(localStorage.riverWidth)
         else
           return Number(defaultRiverWidth) // Default river width
       } else {
@@ -1615,8 +1615,8 @@ console.warn('Remove this line, when WME-Bootstrap will fix its syntax. now it c
     // 2013-10-20: Save current unlimited size preference
     function setLastIsUnlimitedSize (isUnlimitedSize) {
       if (typeof (Storage) !== 'undefined') {
-        // 2013-06-09: Yes! localStorage and sessionStorage support!
-        sessionStorage.isUnlimitedSize = Number(isUnlimitedSize)
+        // 2013-06-09: Yes! localStorage and localStorage support!
+        localStorage.isUnlimitedSize = Number(isUnlimitedSize)
       } else {
         // Sorry! No web storage support..
         console_log('No web storage support')
@@ -1626,9 +1626,9 @@ console.warn('Remove this line, when WME-Bootstrap will fix its syntax. now it c
     // 2013-10-20: Returns last saved unlimited size preference
     function getLastIsUnlimitedSize (defaultValue) {
       if (typeof (Storage) !== 'undefined') {
-        // 2013-10-20: Yes! localStorage and sessionStorage support!
-        if (sessionStorage.isUnlimitedSize)
-          return Number(sessionStorage.isUnlimitedSize)
+        // 2013-10-20: Yes! localStorage and localStorage support!
+        if (localStorage.isUnlimitedSize)
+          return Number(localStorage.isUnlimitedSize)
         else
           return Number(defaultValue) // Default preference
       } else {
@@ -1640,8 +1640,8 @@ console.warn('Remove this line, when WME-Bootstrap will fix its syntax. now it c
     // 2013-10-20: Save current unlimited size preference
     function setLastIsDeleteSegment (isDeleteSegment) {
       if (typeof (Storage) !== 'undefined') {
-        // 2013-06-09: Yes! localStorage and sessionStorage support!
-        sessionStorage.isDeleteSegment = Number(isDeleteSegment)
+        // 2013-06-09: Yes! localStorage and localStorage support!
+        localStorage.isDeleteSegment = Number(isDeleteSegment)
       } else {
         // Sorry! No web storage support..
         console_log('No web storage support')
@@ -1651,9 +1651,9 @@ console.warn('Remove this line, when WME-Bootstrap will fix its syntax. now it c
     // 2013-10-20: Returns last saved unlimited size preference
     function getLastIsDeleteSegment (defaultValue) {
       if (typeof (Storage) !== 'undefined') {
-        // 2013-10-20: Yes! localStorage and sessionStorage support!
-        if (sessionStorage.isDeleteSegment)
-          return Number(sessionStorage.isDeleteSegment)
+        // 2013-10-20: Yes! localStorage and localStorage support!
+        if (localStorage.isDeleteSegment)
+          return Number(localStorage.isDeleteSegment)
         else
           return Number(defaultValue) // Default preference
       } else {

@@ -3,7 +3,7 @@
 // @description     Converts an unsaved WME street segment into a river/forest/canal/other area polygon landmark.
 // @namespace       https://greasyfork.org/users/160654-waze-ukraine
 // @grant           none
-// @version         2026.06.27.001
+// @version         2026.07.30.001
 // @match           https://beta.waze.com/*editor*
 // @match           https://www.waze.com/*editor*
 // @exclude         https://www.waze.com/*user/*editor/*
@@ -79,64 +79,7 @@ console.warn('Remove this line, when WME-Bootstrap will fix its syntax. now it c
     const defaultWidth = 15
     var scriptLanguage = 'us'
     var langText
-    {
-      var Config = [
-        {
-          handler: 'WME-Street-to-River_other',
-          title: 'Other',
-          func: function (ev) {
-            doPOI(ev, 'OTHER')
-          },
-          key: -1,
-          arg: {
-            type: 'OTHER',
-          },
-        },
-        {
-          handler: 'WME-Street-to-River_river',
-          title: 'River',
-          func: function (ev) {
-            doPOI(ev, 'RIVER_STREAM')
-          },
-          key: -1,
-          arg: {
-            type: 'RIVER_STREAM',
-          },
-        },
-        {
-          handler: 'WME-Street-to-River_forest',
-          title: 'Forest',
-          func: function (ev) {
-            doPOI(ev, 'FOREST_GROVE')
-          },
-          key: -1,
-          arg: {
-            type: 'FOREST_GROVE',
-          },
-        },
-        {
-          handler: 'WME-Street-to-River_canal',
-          title: 'Canal',
-          func: function (ev) {
-            doPOI(ev, 'CANAL')
-          },
-          key: -1,
-          arg: {
-            type: 'CANAL',
-          },
-        },
-      ]
-
-      for (var i = 0; i < Config.length; ++i) {
-        WMEKSRegisterKeyboardShortcut('WME-Street-to-River', 'WME-Street-to-River', Config[i].handler, Config[i].title, Config[i].func, Config[i].key, Config[i].arg)
-      }
-
-      WMEKSLoadKeyboardShortcuts('WME-Street-to-River')
-
-      window.addEventListener('beforeunload', function () {
-        WMEKSSaveKeyboardShortcuts('WME-Street-to-River')
-      }, false)
-    }
+    var _sdkShortcutDefs
 
     function insertButtons () {
       if (W.selectionManager.getSelectedWMEFeatures().length === 0)
@@ -1779,74 +1722,303 @@ console.warn('Remove this line, when WME-Bootstrap will fix its syntax. now it c
       .on('segment.wme', (event, element, model) => {
         insertButtons()
       })
+
+/*
+from https://greasyfork.org/en/scripts/26340-wme-place-interface-enhancements (modified)
+*/
+    // ======================================================================
+    // SDK SHORTCUT FORMAT CONVERTERS
+    //
+    // Why these converters are needed:
+    // The WME SDK Shortcuts API (wmeSDK.Shortcuts) returns shortcut keys in
+    // inconsistent formats depending on context:
+    //
+    //   - On initial load / after page reload → combo format ("A+R", "C+S+G")
+    //   - After the user edits a shortcut in WME's UI → raw format ("4,82")
+    //
+    // The raw format is "modValue,keyCode" where modValue is a bitfield
+    // (C=1, S=2, A=4) and keyCode is the numeric keyboard key code. The combo
+    // format is the human-readable string like "C+S+G".
+    //
+    // These converters let us:
+    //   1. Normalize shortcut keys to a canonical { raw, combo } shape for
+    //      reliable persistence in localStorage (via saveOptions/getOptions).
+    //   2. Detect real user changes when polling (checkSDKShortcutChanges)
+    //      by comparing normalized combo strings.
+    //   3. Handle legacy shortcuts migrated from the old WME accelerator /
+    //      localStorage KBS format which stored bare key code numbers.
+    //
+    // Reference: "Shortcuts Full Lifecycle" and the SDK classes.md
+    // → Shortcuts.createShortcut() documentation.
+    // ======================================================================
+    var _KEYCODE_TO_CHAR = {
+      65:'A',66:'B',67:'C',68:'D',69:'E',70:'F',71:'G',72:'H',73:'I',74:'J',75:'K',76:'L',
+      77:'M',78:'N',79:'O',80:'P',81:'Q',82:'R',83:'S',84:'T',85:'U',86:'V',87:'W',88:'X',
+      89:'Y',90:'Z',
+      48:'0',49:'1',50:'2',51:'3',52:'4',53:'5',54:'6',55:'7',56:'8',57:'9',
+      112:'F1',113:'F2',114:'F3',115:'F4',116:'F5',117:'F6',
+      118:'F7',119:'F8',120:'F9',121:'F10',122:'F11',123:'F12',
+      32:'Space',13:'Enter',9:'Tab',27:'Esc',8:'Backspace',46:'Delete',
+      36:'Home',35:'End',33:'PageUp',34:'PageDown',45:'Insert',
+      37:'\u2190',38:'\u2191',39:'\u2192',40:'\u2193',
+      188:',',190:'.',191:'/',186:';',222:"'",219:'[',221:']',220:'\\',189:'-',187:'=',192:'`',
+    }
+
+    var _CHAR_TO_KEYCODE = Object.fromEntries(
+      Object.entries(_KEYCODE_TO_CHAR).map(function (e) { return [e[1].toUpperCase(), Number(e[0])] })
+    )
+
+    var _MOD_CHAR_TO_VAL = { C: 1, S: 2, A: 4 }
+
+    function _comboToRaw (str) {
+      if (!str || str === '' || str === '-1' || str === 'None') return null
+      if (/^\d+,-?\d+$/.test(str)) {
+        var kc = parseInt(str.split(',')[1], 10)
+        return kc < 0 ? null : str
+      }
+      // Handle bare numeric key code (legacy format stored just the key code number, e.g. "67" for 'C')
+      if (/^\d+$/.test(str)) {
+        return '0,' + str
+      }
+      var us = String(str).toUpperCase()
+      if (/^[A-Z0-9]$/.test(us)) return '0,' + us.charCodeAt(0)
+      if (_CHAR_TO_KEYCODE[us] !== undefined) return '0,' + _CHAR_TO_KEYCODE[us]
+      var lm = us.match(/^([ACS]+)\+([A-Z0-9])$/)
+      if (lm) {
+        var mv = lm[1].split('').reduce(function (a, c) { return a | (_MOD_CHAR_TO_VAL[c] || 0) }, 0)
+        return mv + ',' + lm[2].charCodeAt(0)
+      }
+      var nm = us.match(/^([ACS]+)\.(\d+)$/)
+      if (!nm) nm = us.match(/^([ACS]+)\+(\d+)$/)
+      if (nm) {
+        var mv2 = nm[1].split('').reduce(function (a, c) { return a | (_MOD_CHAR_TO_VAL[c] || 0) }, 0)
+        return mv2 + ',' + nm[2]
+      }
+      var sm = us.match(/^([ACS]+)\+(.+)$/)
+      if (sm && _CHAR_TO_KEYCODE[sm[2]] !== undefined) {
+        var mv3 = sm[1].split('').reduce(function (a, c) { return a | (_MOD_CHAR_TO_VAL[c] || 0) }, 0)
+        return mv3 + ',' + _CHAR_TO_KEYCODE[sm[2]]
+      }
+      return null
+    }
+
+    function _rawToCombo (str) {
+      var raw = _comboToRaw(str)
+      if (!raw) return null
+      var parts = raw.split(',')
+      var modValue = parseInt(parts[0], 10)
+      var keyCode = parseInt(parts[1], 10)
+      var keyChar = _KEYCODE_TO_CHAR[keyCode] || String(keyCode)
+      var mods = ''
+      if (modValue & 1) mods += 'C'
+      if (modValue & 2) mods += 'S'
+      if (modValue & 4) mods += 'A'
+      return mods ? mods + '+' + keyChar : keyChar
+    }
+
+    function _normalizeShortcut (value) {
+      var src = value && typeof value === 'object' ? (value.raw || value.combo) : value
+      var raw = _comboToRaw(src)
+      var combo = _rawToCombo(raw)
+      return { raw: raw, combo: combo }
+    }
+
+    // ======================================================================
+    // LEGACY ACTION → SDK SETTINGSKEY MAPPING
+    // ======================================================================
+    var _LEGACY_ACTION_TO_SETTINGSKEY = {
+      'WME-Street-to-River_other': 'poi_other',
+      'WME-Street-to-River_river': 'poi_river',
+      'WME-Street-to-River_forest': 'poi_forest',
+      'WME-Street-to-River_canal': 'poi_canal',
+    }
+
+    // ======================================================================
+    // BUILD SDK SHORTCUT DEFINITIONS
+    // ======================================================================
+    function buildSDKShortcutDefs () {
+      return [
+        { id: 'other',  title: 'Other',  poiType: 'OTHER' },
+        { id: 'river',  title: 'River',  poiType: 'RIVER_STREAM' },
+        { id: 'forest', title: 'Forest', poiType: 'FOREST_GROVE' },
+        { id: 'canal',  title: 'Canal',  poiType: 'CANAL' },
+      ].map(function (pt) {
+        return {
+          id: 'WME-Street-to-River_' + pt.id,
+          description: 'Street to ' + pt.title,
+          settingsKey: 'poi_' + pt.id,
+          callback: function () { doPOI(undefined, pt.poiType) },
+        }
+      })
+    }
+
+    // ======================================================================
+    // PERSISTENCE: saveOptions / getOptions
+    // ======================================================================
+    var _SETTINGS_KEY = 'WME-Street-to-River-Plus_SDKShortcuts'
+
+    // === SDK SHORTCUT INITIALIZATION (after all var data declarations) ===
+    _sdkShortcutDefs = buildSDKShortcutDefs()
+    migrateLegacyShortcuts()
+    initializeSDKShortcuts()
+    window.addEventListener('beforeunload', checkSDKShortcutChanges)
+    setInterval(checkSDKShortcutChanges, 5000)
+
+    function saveOptions (opts) {
+      localStorage.setItem(_SETTINGS_KEY, JSON.stringify(opts))
+    }
+
+    function getOptions () {
+      try {
+        var saved = JSON.parse(localStorage.getItem(_SETTINGS_KEY))
+        if (saved && typeof saved === 'object') return saved
+      } catch (e) {}
+      return { sdkShortcuts: {} }
+    }
+
+    // ======================================================================
+    // MIGRATE LEGACY SHORTCUTS (one-time from localStorage KBS format)
+    // ======================================================================
+    function migrateLegacyShortcuts () {
+      var legacyKey = 'WME-Street-to-RiverKBS'
+      var legacyRaw
+      try {
+        legacyRaw = JSON.parse(localStorage.getItem(legacyKey))
+        if (!Array.isArray(legacyRaw)) return
+      } catch (e) { return }
+
+      var opts = getOptions()
+      if (!opts.sdkShortcuts) opts.sdkShortcuts = {}
+      var migrated = false
+
+      for (var i = 0; i < legacyRaw.length; i++) {
+        var entry = legacyRaw[i]
+        var keys = Object.keys(entry)
+        if (keys.length === 0) continue
+        var shortcutString = keys[0]
+        var actionId = entry[shortcutString]
+        var settingsKey = _LEGACY_ACTION_TO_SETTINGSKEY[actionId]
+        if (!settingsKey) continue
+        if (!shortcutString || shortcutString === '-1' || shortcutString === 'None') continue
+        if (opts.sdkShortcuts[settingsKey] && opts.sdkShortcuts[settingsKey].combo !== null) continue
+        opts.sdkShortcuts[settingsKey] = _normalizeShortcut(shortcutString)
+        migrated = true
+        console_log('Migrated legacy shortcut "' + actionId + '" (' + shortcutString + ') \u2192 ' + settingsKey + ': ' + opts.sdkShortcuts[settingsKey].combo)
+      }
+
+      if (migrated) {
+        saveOptions(opts)
+        localStorage.removeItem(legacyKey)
+        console_log('Legacy shortcut migration complete. Removed key "' + legacyKey + '".')
+      }
+    }
+
+    // ======================================================================
+    // INITIALIZE SDK SHORTCUTS
+    // ======================================================================
+    function initializeSDKShortcuts () {
+      var sdk = getWmeSdkScriptInstance()
+      if (!sdk || !sdk.Shortcuts || !_sdkShortcutDefs) return
+
+      // Delete existing registrations for our shortcuts
+      for (var i = 0; i < _sdkShortcutDefs.length; i++) {
+        var def = _sdkShortcutDefs[i]
+        if (sdk.Shortcuts.isShortcutRegistered({ shortcutId: def.id })) {
+          sdk.Shortcuts.deleteShortcut({ shortcutId: def.id })
+        }
+      }
+
+      // Load saved shortcut keys and register all
+      var opts = getOptions()
+      if (!opts.sdkShortcuts) opts.sdkShortcuts = {}
+
+      for (var j = 0; j < _sdkShortcutDefs.length; j++) {
+        var sd = _sdkShortcutDefs[j]
+        var saved = opts.sdkShortcuts[sd.settingsKey]
+        opts.sdkShortcuts[sd.settingsKey] = _normalizeShortcut(saved)
+
+        try {
+          sdk.Shortcuts.createShortcut({
+            shortcutId: sd.id,
+            description: sd.description,
+            callback: sd.callback,
+            shortcutKeys: opts.sdkShortcuts[sd.settingsKey].combo,
+          })
+        } catch (error) {
+          if (String(error).indexOf('already in use') !== -1) {
+            opts.sdkShortcuts[sd.settingsKey] = { raw: null, combo: null }
+            try {
+              sdk.Shortcuts.createShortcut({
+                shortcutId: sd.id,
+                description: sd.description,
+                callback: sd.callback,
+                shortcutKeys: null,
+              })
+            } catch (error2) {
+              console_log('Unable to create shortcut: ' + sd.id + ' - ' + error2)
+            }
+          } else {
+            console_log('Unable to create shortcut: ' + sd.id + ' - ' + error)
+          }
+        }
+      }
+      saveOptions(opts)
+      console_log('SDK shortcuts initialized (' + _sdkShortcutDefs.length + ' total)')
+    }
+
+    // ======================================================================
+    // POLL SHORTCUT CHANGES (persist user edits every 5s + on beforeunload)
+    // ======================================================================
+    function checkSDKShortcutChanges () {
+      var sdk = getWmeSdkScriptInstance()
+      if (!sdk || !sdk.Shortcuts || !_sdkShortcutDefs) return
+
+      var shortcuts = sdk.Shortcuts.getAllShortcuts()
+      var triggerSave = false
+
+      for (var i = 0; i < shortcuts.length; i++) {
+        var shortcut = shortcuts[i]
+        var matchingDef = null
+        for (var j = 0; j < _sdkShortcutDefs.length; j++) {
+          if (_sdkShortcutDefs[j].id === shortcut.shortcutId) {
+            matchingDef = _sdkShortcutDefs[j]
+            break
+          }
+        }
+        if (!matchingDef) continue
+
+        var normalized = _normalizeShortcut(shortcut.shortcutKeys)
+        var opts = getOptions()
+        if (!opts.sdkShortcuts) opts.sdkShortcuts = {}
+        if (opts.sdkShortcuts[matchingDef.settingsKey] && opts.sdkShortcuts[matchingDef.settingsKey].combo !== normalized.combo) {
+          triggerSave = true
+          break
+        }
+      }
+
+      if (triggerSave) {
+        for (var k = 0; k < shortcuts.length; k++) {
+          var s = shortcuts[k]
+          var matchDef = null
+          for (var l = 0; l < _sdkShortcutDefs.length; l++) {
+            if (_sdkShortcutDefs[l].id === s.shortcutId) {
+              matchDef = _sdkShortcutDefs[l]
+              break
+            }
+          }
+          if (matchDef && matchDef.settingsKey) {
+            var opts2 = getOptions()
+            if (!opts2.sdkShortcuts) opts2.sdkShortcuts = {}
+            opts2.sdkShortcuts[matchDef.settingsKey] = _normalizeShortcut(s.shortcutKeys)
+            saveOptions(opts2)
+          }
+        }
+        console_log('SDK shortcut changes saved.')
+      }
+    }
   }
 
   streetToRiver_bootstrap()
-
-  // from: https://greasyfork.org/ru/scripts/16071-wme-keyboard-shortcuts (modify)
-  /*
-  when adding shortcuts each shortcut will need a unique name
-  the command to add links is WMERegisterKeyboardShortcut(ScriptName, ShortcutsHeader, NewShortcut, ShortcutDescription, FunctionToCall, ShortcutKeysObj) {
-  ScriptName: This is the name of your script used to track all of your shortcuts on load and save.
-  ScriptName: replace 'WMEAwesome' with your scripts name such as 'SomeOtherScript'
-  ShortcutsHeader: this is the header that will show up in the keyboard editor
-  NewShortcut: This is the name of the shortcut and needs to be unique from all of the other shortcuts, from other scripts, and WME
-  ShortcutDescription: This will show up as the text next to your shortcut
-  FunctionToCall: this is the name of your function that will be called when the keyboard shortcut is presses
-  ShortcutKeysObj: the is the object representing the keys watched set this to '-1' to let the users specify their own shortcuts.
-  ShortcutKeysObj: The alt, shift, and ctrl keys are A=alt, S=shift, C=ctrl. for short cut to use "alt shift ctrl and l" the object would be 'ASC+l'
-   */
-  function WMEKSRegisterKeyboardShortcut (a, b, c, d, e, f, g) {
-    try {
-      I18n.translations[I18n.locale].keyboard_shortcuts.groups[a].members.length
-    } catch (c) {
-      W.accelerators.Groups[a] = [],
-        W.accelerators.Groups[a].members = [],
-        I18n.translations[I18n.locale].keyboard_shortcuts.groups[a] = [],
-        I18n.translations[I18n.locale].keyboard_shortcuts.groups[a].description = b,
-        I18n.translations[I18n.locale].keyboard_shortcuts.groups[a].members = []
-    }
-    if (e && 'function' == typeof e) {
-      I18n.translations[I18n.locale].keyboard_shortcuts.groups[a].members[c] = d,
-        W.accelerators.addAction(c, {
-          group: a
-        })
-      var i = '-1',
-        j = {}
-      j[i] = c,
-        W.accelerators._registerShortcuts(j),
-      null !== f && (j = {}, j[f] = c, W.accelerators._registerShortcuts(j)),
-        W.accelerators.events.register(c, null, function () {
-          e(g)
-        })
-    } else
-      alert('The function ' + e + ' has not been declared')
-  }
-
-  function WMEKSLoadKeyboardShortcuts (a) {
-    if (console.log('WMEKSLoadKeyboardShortcuts(' + a + ')'), localStorage[a + 'KBS'])
-      for (var b = JSON.parse(localStorage[a + 'KBS']), c = 0; c < b.length; c++)
-        try {
-          W.accelerators._registerShortcuts(b[c])
-        } catch (a) {
-          console.log(a)
-        }
-  }
-
-  function WMEKSSaveKeyboardShortcuts (a) {
-    console.log('WMEKSSaveKeyboardShortcuts(' + a + ')')
-    var b = []
-    for (var c in W.accelerators.Actions) {
-      var d = ''
-      if (W.accelerators.Actions[c].group == a) {
-        W.accelerators.Actions[c].shortcut ? (W.accelerators.Actions[c].shortcut.altKey === !0 && (d += 'A'), W.accelerators.Actions[c].shortcut.shiftKey === !0 && (d += 'S'), W.accelerators.Actions[c].shortcut.ctrlKey === !0 && (d += 'C'), '' !== d && (d += '+'), W.accelerators.Actions[c].shortcut.keyCode && (d += W.accelerators.Actions[c].shortcut.keyCode)) : d = '-1'
-        var e = {}
-        e[d] = W.accelerators.Actions[c].id,
-          b[b.length] = e
-      }
-    }
-    localStorage[a + 'KBS'] = JSON.stringify(b)
-  }
 
   /* ********************************************************** */
 })()

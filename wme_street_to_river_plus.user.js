@@ -1724,7 +1724,7 @@ console.warn('Remove this line, when WME-Bootstrap will fix its syntax. now it c
       })
 
 /*
-from https://greasyfork.org/en/scripts/26340-wme-place-interface-enhancements (modified)
+referenced from https://greasyfork.org/en/scripts/26340-wme-place-interface-enhancements
 */
     // ======================================================================
     // SDK SHORTCUT FORMAT CONVERTERS
